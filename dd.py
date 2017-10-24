@@ -26,6 +26,11 @@ class Node:
         self.basis = [[0 for i in Y] for j in X]
         self.id = Node.number
         Node.number+=1
+
+    def __str__(self):
+        return str(self.id)
+    def __repr__(self):
+        return str(self.id)
         
     #Functions
     @staticmethod
@@ -90,16 +95,16 @@ class Element:
         self.n1.in_elements.add(self)
         self.n2.in_elements.add(self)
         self.n3.in_elements.add(self)
+
+    def __str__(self):
+        return str(self.id)
+    def __repr__(self):
+        return str(self.id) + ", " + str(self.n1.point) + ", " + str(self.n2.point) + ", "+ str(self.n3.point)
     
     #Functions
     @staticmethod
     def getNumberOfElements():
         return Element.number
-    
-    def __str__(self):
-        return str(self.id)
-    def __repr__(self):
-        return str(self.id) + ", " + str(self.n1.point) + ", " + str(self.n2.point) + ", "+ str(self.n3.point)
     
     def area(self):
         #Input: nothing
@@ -247,12 +252,30 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
+from shapely.geometry import MultiLineString
+from matplotlib.path import Path
+
+def plot_path(tris):
+    fig, ax = plt.subplots()
+    poly = plt.Polygon(tris, ec = "k")
+    x,y = zip(*tris)
+
+    ax.scatter(x,y, color="r", alpha = 0.6, zorder = 3, s = 10*10*10)
+
+    plt.axis([dom[0][0], dom[1][0] -1, dom[0][1], dom[1][1] -1])
+
+    major = np.arange(0, dom[1][0]-1, 1)
+    ax.set_xticks(major)
+    ax.set_yticks(major)
+    ax.grid(which='major', alpha=1.0) 
+    plt.show()
 
 def plot(Z,c = "red"):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     # surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm, linewidth=0, antialiased=False)
-    surf = ax.scatter(X, Y, Z, color =c)
+    surf = ax.plot_wireframe(X, Y, Z, color =c)
+    ax.scatter(X, Y, Z, color = "blue")
 
     # Customize the z axis.
     ax.set_xlabel('X')
@@ -262,15 +285,49 @@ def plot(Z,c = "red"):
     # Add a color bar which maps values to colors.
     plt.show()
 
+
+def plot_tri(tris):
+    COLOR = {
+        True:  '#6699cc',
+        False: '#ffcc33'
+        }
+
+    def v_color(ob):
+        return COLOR[ob.is_simple]
+    def plot_coords(ax, ob):
+        for line in ob:
+            x, y = line.xy
+            ax.plot(x, y, 'o', color='#999999', zorder=1)
+
+    def plot_bounds(ax, ob):
+        x, y = zip(*list((p.x, p.y) for p in ob.boundary))
+        ax.plot(x, y, 'o', color='#000000', zorder=1)
+
+    def plot_lines(ax, ob):
+        for line in ob:
+            x, y = line.xy
+            ax.plot(x, y, color=v_color(ob), alpha=0.7, linewidth=3, solid_capstyle='round', zorder=2)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(122)
+    mline2 = MultiLineString(tris)
+
+    plot_coords(ax, mline2)
+    plot_bounds(ax, mline2)
+    plot_lines(ax, mline2)
+
+    plt.show()
+
+
 from scipy.optimize import linprog
 from numpy.linalg import solve   
 def solve(levels, u_f):
     bases = []
-    ids = []
+    nodes = []
     for l in levels:
         for n in l.nodes:
             bases.append(np.ravel(n.basis))
-            ids.append(n.id)
+            nodes.append(n)
 
     N = np.transpose(np.matrix(bases)) # domain^2 x # of total nodes
     u = np.ravel(u_f) #domain^2 x 1
@@ -279,14 +336,23 @@ def solve(levels, u_f):
     res = linprog(c, A_eq = N, b_eq =u, options={"disp": True})
     print(res)
 
+    NodesUsedByLevel = [[] for l in levels]
     for i in range(0,len(res.x)):
         if (res.x[i]>0):
             res.x[i] = 1
-            print("used node id: ", ids[i])
+            print("used node id: ", nodes[i])
+            NodesUsedByLevel[nodes[i].level].append(nodes[i])
             # plot(np.reshape(bases[i], (dom[1][0], dom[1][1])))
         else:
             res.x[i] = 0
 
+    for lev  in NodesUsedByLevel:
+        tri = []
+        for n in lev:
+            print(n.point)  
+            tri += [n.point[:2]]
+                #tri.append((e.n2.point[:2], e.n1.point[:2], e.n3.point[:2], e.n2.point[:2]))
+        plot_path(tri)
     
     # print(u)
     # print(N)
@@ -336,8 +402,8 @@ def test():
 
     #TEST THE SOLVER
     #create the function u(x)
-    # u_f = [[4 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    u_f = [[(-0.25*x+2) if x>=y else random.randint(0,1) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u_f = [[(0.25*(x-4) - 0.25*y + 1) if x>=y else 0 for y in range(len(X))] for x in range(len(Y))]
+    # u_f = [[(-0.25*x+2) if x>=y else 0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u_f = [[random.randint(0, 5) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     plot(u_f)
 
