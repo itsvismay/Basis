@@ -19,6 +19,7 @@ X, Y = np.meshgrid(X, Y)
 class Node:
     #class variables
     number = 0
+    level_node_number = 0 #the ith node in this level
 
     def __init__(self, x, y, l):
         #Instance Variables
@@ -27,6 +28,7 @@ class Node:
         self.in_elements = set()  #this node is contained in elements
         self.basis = [[0 for i in Y] for j in X]
         self.id = Node.number
+        self.mass = 0
         Node.number+=1
 
     def __str__(self):
@@ -104,11 +106,38 @@ class Element:
     def getNumberOfElements():
         return Element.number
 
-    def area(self):
+    def get_area(self):
         #Input: nothing
         #Output: double
         #Use: area of triangle
         return np.linalg.norm(np.cross((self.n1.point - self.n2.point), (self.n1.point - self.n3.point)))*0.5
+
+    def compute_stiffness(self):
+        #https://femmatlab.wordpress.com/2015/04/24/triangle-elements-stiffness-matrix/
+        #http://www.civil.egmu.net/wonsiri/fe6.pdf
+        J11 = 1.1*self.n1.point[0] - self.n3.point[0]
+        J12 =self.n1.point[1] - self.n3.point[1]
+        J21 =self.n2.point[0] - self.n3.point[0]
+        J22 =self.n2.point[1] - self.n3.point[1]
+        J = np.matrix([[J11, J12],[J21, J22]])
+        Be = np.matrix([[J22, 0, -1*J12, 0, -1*J22+J12, 0],
+                        [0, -1*J21, 0, J11, 0, J21-J11],
+                        [-1*J21, J22, J11, -1*J12, J21-J11, -1*J22+J12]])*(1.0/np.linalg.det(J))
+
+        E = 1e+3
+        v = 0.35
+        D = np.matrix([[1-v, v, 0],
+                    [ v, 1-v, 0],
+                    [ 0, 0, 0.5 -v]])*(E/(1-v))
+
+        K = (np.transpose(Be)*D*Be)*1*self.get_area()
+        print(self.n1.point)
+        print(self.n2.point)
+        print(self.n3.point)
+        # print(K)
+        return K
+
+
 
     def split(self, nodedict):
         #Input: dictionary of nodek and nodej and their mid point node
@@ -185,7 +214,7 @@ class Element:
     # def create_basis(self):
 
     #     if((self.n1.point - self.n2.point).dot(self.n1.point - self.n3.point) == 0):
-    #         #n1 is right angle
+    #         #n1 is right anglehttps://mail.google.com/mail/u/0/#label/DGP/15f6ebcb8bcc860d
     #         self.n1.basis[self.n1.point[0]][self.n1.point[1]] = 1
 
 class Level:
@@ -198,8 +227,8 @@ class Level:
         self.elements = set()
         self.nodes = set()
         self.splitnodedict = {}
-        self.K = None
-        self.M = None
+        self.K = []
+        self.M = []
         self.depth = Level.number
         if(Level.number == 0):
             self.create_level_one()
@@ -233,6 +262,9 @@ class Level:
         assert(e1 in self.elements)
         assert(e2 in self.elements)
 
+        self.get_mass_matrix()
+        self.get_stiffness_matrix()
+
     def add_elements(self, elemts):
         #Input: a set of unique elements
         #Output: Nothing
@@ -249,10 +281,9 @@ class Level:
         #Input: Nothing
         #Output: Nothing
         #Use: creates basis to span elements in this level
-
-        #for each node in level
-            #for each element in node.in_elements:
-                #update node.basis
+            #for each node in level
+                #for each element in node.in_elements:
+                    #update node.basis
 
         for n in self.nodes:
             n.update_basis()
@@ -261,22 +292,75 @@ class Level:
         #     print(np.array(n.basis))
 
     def get_mass_matrix(self):
-        if(self.M != None):
+        if(len(self.M) != 0):
             return self.M
 
         if(len(self.nodes) == 0):
             print("You haven't created a basis yet")
-            return
+            return self.M
+
+        for e in self.elements:
+            element_mass = (e.get_area()*1)/3.0
+            e.n1.mass += element_mass
+            e.n3.mass += element_mass
+            e.n2.mass += element_mass
+
+        massVec = []
+        for n in self.nodes:
+            massVec.append(n.mass)
+            massVec.append(n.mass)
+
+        self.M = np.diag(massVec)
+        # print(self.M)
+        return self.M
+
 
 
 
     def get_stiffness_matrix(self):
-        if(self.K != None):
+        #
+        #
+        #Use: Indexing the K matrix only works if its created before the level has been split!!
+        if(len(self.K) != 0):
             return self.K
 
         if(len(self.nodes) == 0):
             print("You haven't created a basis yet")
             return
+        self.K = np.zeros((2*len(self.nodes), 2*len(self.nodes))) #2*n because 2 dimensions
+        print(self.K)
+        print(len(self.nodes))
+        print(Node.number)
+        offset = Node.number - len(self.nodes)
+        for e in self.elements:
+            minNodeNum = Node.number - len(self.nodes) #re-indexes nodes to be min = 0 max = len(# nodes_in_level)
+            indices = [e.n1.id - minNodeNum,
+                        e.n2.id - minNodeNum,
+                        e.n3.id - minNodeNum]
+
+            local_k = e.compute_stiffness()
+            j = 0
+            for r in local_k:
+                dfxrdx1 = r.item(0)
+                dfxrdy1 = r.item(1)
+                dfxrdx2 = r.item(2)
+                dfxrdy2 = r.item(3)
+                dfxrdx3 = r.item(4)
+                dfxrdy3 = r.item(5)
+
+                kj = j%2
+                self.K[2*indices[j/2]+kj][2*indices[0]] = dfxrdx1
+                self.K[2*indices[j/2]+kj][2*indices[0]+1] = dfxrdy1
+
+                self.K[2*indices[j/2]+kj][2*indices[1]] = dfxrdx2
+                self.K[2*indices[j/2]+kj][2*indices[1]+1] = dfxrdy2
+
+                self.K[2*indices[j/2]+kj][2*indices[2]] = dfxrdx3
+                self.K[2*indices[j/2]+kj][2*indices[2]+1] = dfxrdy3
+                j+=1
+        print(self.K)
+
+
 
     def split(self):
         #Output: a new level subdivided from old level
@@ -288,6 +372,9 @@ class Level:
         #starts iterative split using dict (key = node1, key = node2) => val = in-between node
         for e in self.elements:
             lk.add_elements(e.split(self.splitnodedict))
+
+        lk.get_mass_matrix()
+        lk.get_stiffness_matrix()
 
         return lk
 
@@ -338,23 +425,21 @@ def test():
 
     l1.create_bases()
 
-    l2 = l1.split()
-    l2.create_bases()
-
-    l3 = l2.split()
-    l3.create_bases()
+    # l2 = l1.split()
+    # l2.create_bases()
+    #
+    # l3 = l2.split()
+    # l3.create_bases()
 
     print("OK Level creation")
 
-    #TEST THE SOLVER
-    #create the function u(x)
-    u_f = [[(0.25*(x-4) - 0.25*y + 1) if x>=y else 0 for y in range(len(X))] for x in range(len(Y))]
-    # u_f = [[(-0.25*x+2) if x>=y else 0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u_f = [[random.randint(0, 5) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    plotting.plot(X, Y, u_f)
-
-    solve([l1, l2, l3], u_f)
-
-    print("OK Solve")
+    # #TEST THE SOLVER
+    # #create the function u(x)
+    # u_f = [[(0.25*(x-4) - 0.25*y + 1) if x>=y else 0 for y in range(len(X))] for x in range(len(Y))]
+    # # u_f = [[(-0.25*x+2) if x>=y else 0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # # u_f = [[random.randint(0, 5) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # plotting.plot(X, Y, u_f)
+    # solve([l1, l2, l3], u_f)
+    # print("OK Solve")
 
 test()
