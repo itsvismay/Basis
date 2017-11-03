@@ -124,16 +124,16 @@ class Element:
                         [0, -1*J21, 0, J11, 0, J21-J11],
                         [-1*J21, J22, J11, -1*J12, J21-J11, -1*J22+J12]])*(1.0/np.linalg.det(J))
 
-        E = 1e+3
+        E = 1e+1
         v = 0.35
         D = np.matrix([[1-v, v, 0],
                     [ v, 1-v, 0],
                     [ 0, 0, 0.5 -v]])*(E/(1-v))
 
         K = (np.transpose(Be)*D*Be)*1*self.get_area()
-        print(self.n1.point)
-        print(self.n2.point)
-        print(self.n3.point)
+        print(self.n1.id, "-", self.n1.point)
+        print(self.n2.id, "-", self.n2.point)
+        print(self.n3.id, "-", self.n3.point)
         # print(K)
         return K
 
@@ -300,7 +300,7 @@ class Level:
             return self.M
 
         for e in self.elements:
-            element_mass = (e.get_area()*1)/3.0
+            element_mass = 1*(e.get_area()*1)/3.0
             e.n1.mass += element_mass
             e.n3.mass += element_mass
             e.n2.mass += element_mass
@@ -327,10 +327,8 @@ class Level:
         if(len(self.nodes) == 0):
             print("You haven't created a basis yet")
             return
+
         self.K = np.zeros((2*len(self.nodes), 2*len(self.nodes))) #2*n because 2 dimensions
-        print(self.K)
-        print(len(self.nodes))
-        print(Node.number)
         offset = Node.number - len(self.nodes)
         for e in self.elements:
             minNodeNum = Node.number - len(self.nodes) #re-indexes nodes to be min = 0 max = len(# nodes_in_level)
@@ -349,17 +347,17 @@ class Level:
                 dfxrdy3 = r.item(5)
 
                 kj = j%2
-                self.K[2*indices[j/2]+kj][2*indices[0]] = dfxrdx1
-                self.K[2*indices[j/2]+kj][2*indices[0]+1] = dfxrdy1
+                self.K[2*indices[j/2]+kj][2*indices[0]] += dfxrdx1
+                self.K[2*indices[j/2]+kj][2*indices[0]+1] += dfxrdy1
 
-                self.K[2*indices[j/2]+kj][2*indices[1]] = dfxrdx2
-                self.K[2*indices[j/2]+kj][2*indices[1]+1] = dfxrdy2
+                self.K[2*indices[j/2]+kj][2*indices[1]] += dfxrdx2
+                self.K[2*indices[j/2]+kj][2*indices[1]+1] += dfxrdy2
 
-                self.K[2*indices[j/2]+kj][2*indices[2]] = dfxrdx3
-                self.K[2*indices[j/2]+kj][2*indices[2]+1] = dfxrdy3
+                self.K[2*indices[j/2]+kj][2*indices[2]] += dfxrdx3
+                self.K[2*indices[j/2]+kj][2*indices[2]+1] += dfxrdy3
                 j+=1
-        print(self.K)
 
+        return self.K
 
 
     def split(self):
@@ -377,6 +375,23 @@ class Level:
         lk.get_stiffness_matrix()
 
         return lk
+
+
+from scipy.linalg import eigh
+def general_eig_solve(l, A, B):
+    v_old = np.empty(2*len(l.nodes))
+    minNodeNum = Node.number - len(l.nodes)
+    for n in l.nodes:
+        print(n.id,"-", n.point)
+        v_old[2*(n.id-minNodeNum)] = n.point[0]
+        v_old[2*(n.id-minNodeNum)+1] = n.point[1]
+    print(v_old)
+    eigvals, eigvecs = eigh(np.matrix(A), np.matrix(B), eigvals_only=False)
+    # eigvecs, eigvals = np.linalg.eigh(np.linalg.inv(B)*A)
+    indx = 0
+    for v in eigvecs:
+        plotting.plot_bases(v_old, v, eigvals[indx], indx)
+        indx+=1
 
 from scipy.optimize import linprog
 from numpy.linalg import solve
@@ -441,5 +456,7 @@ def test():
     # plotting.plot(X, Y, u_f)
     # solve([l1, l2, l3], u_f)
     # print("OK Solve")
+
+    general_eig_solve(l1, l1.get_stiffness_matrix(), l1.get_mass_matrix())
 
 test()

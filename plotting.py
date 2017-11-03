@@ -6,6 +6,44 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 from shapely.geometry import MultiLineString
 from matplotlib.path import Path
 import numpy as np
+from mayavi.mlab import *
+import math
+
+import matplotlib.animation as animation
+from matplotlib import collections as mc
+def plot_bases(vo, v, l, indx, c="red"):
+    def _update_plot(i, fig, scat, x, y):
+        v_new = vo+ v*math.sin(math.sqrt(abs(l))*i)
+        p = []
+        for i in range(len(v_new)/2):
+            p.append([v_new[2*i], v_new[2*i+1]])
+        scat.set_offsets(p)
+        return scat,
+
+    fig =  plt.figure()
+
+    x = v[0:][::2]
+    y = v[1:][::2]
+    print(x)
+    print(y)
+
+    ax = fig.add_subplot(111)
+    ax.grid(True, linestyle = '-', color = '0.75')
+    ax.set_xlim([-1, 5])
+    ax.set_ylim([-1, 5])
+    ax.add_collection(mc.LineCollection([]))
+
+    scat = plt.scatter(x, y, c = x)
+    scat.set_alpha(1)
+
+    anim = animation.FuncAnimation(fig, _update_plot, fargs = (fig, scat, x, y),
+                               frames = 100, interval = 100)
+
+    anim.save(str(indx)+'Basis.mp4', fps=30)
+
+    plt.show()
+
+
 
 def plot_path(tris, dom):
     fig, ax = plt.subplots()
