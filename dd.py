@@ -377,17 +377,24 @@ class Level:
         return lk
 
 
-from scipy.linalg import eigh
+import scipy
 def general_eig_solve(l, A, B):
+
     v_old = np.empty(2*len(l.nodes))
     minNodeNum = Node.number - len(l.nodes)
     for n in l.nodes:
         print(n.id,"-", n.point)
         v_old[2*(n.id-minNodeNum)] = n.point[0]
         v_old[2*(n.id-minNodeNum)+1] = n.point[1]
-    print(v_old)
-    eigvals, eigvecs = eigh(np.matrix(A), np.matrix(B), eigvals_only=False)
-    # eigvecs, eigvals = np.linalg.eigh(np.linalg.inv(B)*A)
+    # print(v_old)
+    # eigvals, eigvecs = scipy.sparse.linalg.eigs(np.matrix(A),k = 4, M = np.matrix(B))
+    eigvals, eigvecs = scipy.linalg.eigh(np.matrix(A), np.matrix(B), overwrite_a = False, overwrite_b = False)
+    # eigvecs, eigvals = np.linalg.eig(np.linalg.inv(B)*A)
+
+    # print("check general eigen problem solution")
+    # print(B)
+    # print((B.dot(eigvecs)).T.dot(eigvecs))
+    # print(eigvals)
     indx = 0
     for v in eigvecs:
         plotting.plot_bases(v_old, v, eigvals[indx], indx)
@@ -440,11 +447,11 @@ def test():
 
     l1.create_bases()
 
-    # l2 = l1.split()
-    # l2.create_bases()
+    l2 = l1.split()
+    l2.create_bases()
     #
-    # l3 = l2.split()
-    # l3.create_bases()
+    l3 = l2.split()
+    l3.create_bases()
 
     print("OK Level creation")
 
@@ -457,6 +464,6 @@ def test():
     # solve([l1, l2, l3], u_f)
     # print("OK Solve")
 
-    general_eig_solve(l1, l1.get_stiffness_matrix(), l1.get_mass_matrix())
+    general_eig_solve(l3, l3.get_stiffness_matrix(), l3.get_mass_matrix())
 
 test()

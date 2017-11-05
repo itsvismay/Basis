@@ -24,8 +24,6 @@ def plot_bases(vo, v, l, indx, c="red"):
 
     x = v[0:][::2]
     y = v[1:][::2]
-    print(x)
-    print(y)
 
     ax = fig.add_subplot(111)
     ax.grid(True, linestyle = '-', color = '0.75')
@@ -37,9 +35,9 @@ def plot_bases(vo, v, l, indx, c="red"):
     scat.set_alpha(1)
 
     anim = animation.FuncAnimation(fig, _update_plot, fargs = (fig, scat, x, y),
-                               frames = 100, interval = 100)
+                               frames = 200, interval = 100)
 
-    anim.save(str(indx)+'Basis.mp4', fps=30)
+    anim.save(str(indx)+'Level3Basis.mp4', fps=30)
 
     plt.show()
 
