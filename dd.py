@@ -131,9 +131,9 @@ class Element:
                     [ 0, 0, 0.5 -v]])*(E/(1-v))
 
         K = (np.transpose(Be)*D*Be)*1*self.get_area()
-        print(self.n1.id, "-", self.n1.point)
-        print(self.n2.id, "-", self.n2.point)
-        print(self.n3.id, "-", self.n3.point)
+        # print(self.n1.id, "-", self.n1.point)
+        # print(self.n2.id, "-", self.n2.point)
+        # print(self.n3.id, "-", self.n3.point)
         # print(K)
         return K
 
@@ -383,13 +383,13 @@ def general_eig_solve(l, A, B):
     v_old = np.empty(2*len(l.nodes))
     minNodeNum = Node.number - len(l.nodes)
     for n in l.nodes:
-        print(n.id,"-", n.point)
+        # print(n.id,"-", n.point)
         v_old[2*(n.id-minNodeNum)] = n.point[0]
         v_old[2*(n.id-minNodeNum)+1] = n.point[1]
     # print(v_old)
     # eigvals, eigvecs = scipy.sparse.linalg.eigs(np.matrix(A),k = 4, M = np.matrix(B))
     eigvals, eigvecs = scipy.linalg.eigh(np.matrix(A), np.matrix(B), overwrite_a = False, overwrite_b = False)
-    # eigvecs, eigvals = np.linalg.eig(np.linalg.inv(B)*A)
+    #eigvals, eigvecs = np.linalg.eig(np.linalg.inv(B)*A)
 
     # print("check general eigen problem solution")
     # print(B)
@@ -397,8 +397,9 @@ def general_eig_solve(l, A, B):
     # print(eigvals)
     indx = 0
     for v in eigvecs:
-        plotting.plot_bases(v_old, v, eigvals[indx], indx)
+        # plotting.plot_bases(v_old, v, eigvals[indx], indx)
         indx+=1
+    return eigvals, eigvecs
 
 from scipy.optimize import linprog
 from numpy.linalg import solve
@@ -414,7 +415,7 @@ def solve(levels, u_f):
     u = np.ravel(u_f) #domain^2 x 1
     c = np.array([1 for k in range(N.shape[1])])
 
-    res = linprog(c, A_eq = N, b_eq =u, options={"disp": True})
+    res = linprog(c, A_eq = N, b_eq =u, options={"disp": True, "tol": 0.5})
     print(res)
 
     NodesUsedByLevel = [[] for l in levels]
@@ -464,6 +465,18 @@ def test():
     # solve([l1, l2, l3], u_f)
     # print("OK Solve")
 
-    general_eig_solve(l3, l3.get_stiffness_matrix(), l3.get_mass_matrix())
+    D, V = general_eig_solve(l3, l3.get_stiffness_matrix(), l3.get_mass_matrix())
+    minNodeNum = Node.number - len(l3.nodes)
+    #ignore the first 3 eigvecs, use the 5th, just because
+    u_f = [[0 for x in range(len(X))] for y in range(len(Y))]
+    for n in l3.nodes:
+        ev = V[:, 4]
+        p1 = np.array([ ev[2*(n.id-minNodeNum)], ev[2*(n.id-minNodeNum)+1], 0 ])
+        u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1- n.point)**2
+
+    plotting.plot(X,Y, u_f)
+    solve([l1, l2, l3], u_f)
+
+
 
 test()
