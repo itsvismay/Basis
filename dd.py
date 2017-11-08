@@ -415,27 +415,30 @@ def solve(levels, u_f):
     u = np.ravel(u_f) #domain^2 x 1
     c = np.array([1 for k in range(N.shape[1])])
 
-    res = linprog(c, A_eq = N, b_eq =u, options={"disp": True, "tol": 0.01})
+    res = linprog(c, A_eq = N, b_eq =u, options={"disp": True, "tol": 0.2})
     print(res)
 
     NodesUsedByLevel = [[] for l in levels]
     for i in range(0,len(res.x)):
         if (res.x[i]>0):
             res.x[i] = 1
-            print("used node id: ", nodes[i])
+            # print("used node id: ", nodes[i])
             NodesUsedByLevel[nodes[i].level].append(nodes[i])
             # plot(np.reshape(bases[i], (dom[1][0], dom[1][1])))
         else:
             res.x[i] = 0
 
+    print("Nodes used: ")
+    count = 0
     for lev  in NodesUsedByLevel:
         tri = []
         for n in lev:
-            print(n.point)
+            # print(n.point)
             tri += [n.point[:2]]
+            count +=1
                 #tri.append((e.n2.point[:2], e.n1.point[:2], e.n3.point[:2], e.n2.point[:2]))
         plotting.plot_path(tri, dom)
-
+    print(count)
     # print(u)
     # print(N)
 
@@ -473,7 +476,7 @@ def test():
 
     for n in l3.nodes:
         p1 = np.array([ ev[2*(n.id-minNodeNum)], ev[2*(n.id-minNodeNum)+1], 0 ])
-        u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)**2
+        u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)
 
     plotting.plot(X,Y, u_f)
     solve([l1, l2, l3], u_f)
