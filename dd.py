@@ -415,7 +415,7 @@ def solve(levels, u_f):
     u = np.ravel(u_f) #domain^2 x 1
     c = np.array([1 for k in range(N.shape[1])])
 
-    res = linprog(c, A_eq = N, b_eq =u, options={"disp": True, "tol": 0.5})
+    res = linprog(c, A_eq = N, b_eq =u, options={"disp": True, "tol": 0.01})
     print(res)
 
     NodesUsedByLevel = [[] for l in levels]
@@ -469,10 +469,11 @@ def test():
     minNodeNum = Node.number - len(l3.nodes)
     #ignore the first 3 eigvecs, use the 5th, just because
     u_f = [[0 for x in range(len(X))] for y in range(len(Y))]
+    ev = V[:,2]
+
     for n in l3.nodes:
-        ev = V[:, 4]
         p1 = np.array([ ev[2*(n.id-minNodeNum)], ev[2*(n.id-minNodeNum)+1], 0 ])
-        u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1- n.point)**2
+        u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)**2
 
     plotting.plot(X,Y, u_f)
     solve([l1, l2, l3], u_f)

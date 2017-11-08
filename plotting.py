@@ -6,7 +6,7 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 from shapely.geometry import MultiLineString
 from matplotlib.path import Path
 import numpy as np
-from mayavi.mlab import *
+# from mayavi.mlab import *
 import math
 
 import matplotlib.animation as animation
