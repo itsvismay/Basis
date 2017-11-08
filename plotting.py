@@ -44,6 +44,8 @@ def plot_bases(vo, v, l, indx, c="red"):
 
 
 def plot_path(tris, dom):
+    if(len(tris) == 0):
+        return
     fig, ax = plt.subplots()
     poly = plt.Polygon(tris, ec = "k")
     x,y = zip(*tris)

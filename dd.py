@@ -403,7 +403,7 @@ def general_eig_solve(l, A, B):
 
 from scipy.optimize import linprog
 from numpy.linalg import solve
-def solve(levels, u_f):
+def solve(levels, u_f, toll):
     bases = []
     nodes = []
     for l in levels:
@@ -414,9 +414,13 @@ def solve(levels, u_f):
     N = np.transpose(np.matrix(bases)) # domain^2 x # of total nodes
     u = np.ravel(u_f) #domain^2 x 1
     c = np.array([1 for k in range(N.shape[1])])
+    bds = np.array([(-20, None) for k in range(N.shape[1])])
+    epsilon = np.array([toll for k in range(N.shape[0])])
+    u = epsilon - u
+    N = -1*N
 
-    res = linprog(c, A_eq = N, b_eq =u, options={"disp": True, "tol": 0.2})
-    print(res)
+    res = linprog(c, A_ub = N, b_ub = u, options={"disp": True, "tol": 1e-8})
+    # print(res)
 
     NodesUsedByLevel = [[] for l in levels]
     for i in range(0,len(res.x)):
@@ -428,7 +432,6 @@ def solve(levels, u_f):
         else:
             res.x[i] = 0
 
-    print("Nodes used: ")
     count = 0
     for lev  in NodesUsedByLevel:
         tri = []
@@ -438,7 +441,7 @@ def solve(levels, u_f):
             count +=1
                 #tri.append((e.n2.point[:2], e.n1.point[:2], e.n3.point[:2], e.n2.point[:2]))
         plotting.plot_path(tri, dom)
-    print(count)
+    print("tol, nodes ",toll,", ",count)
     # print(u)
     # print(N)
 
@@ -479,7 +482,17 @@ def test():
         u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)
 
     plotting.plot(X,Y, u_f)
-    solve([l1, l2, l3], u_f)
+    solve([l1, l2, l3], u_f, 0)
+    # solve([l1, l2, l3], u_f, 0.01)
+    # solve([l1, l2, l3], u_f, 0.05)
+    # solve([l1, l2, l3], u_f, 0.08)
+    # solve([l1, l2, l3], u_f, 0.1)
+    # solve([l1, l2, l3], u_f, 0.2)
+    # solve([l1, l2, l3], u_f, 0.3)
+    # solve([l1, l2, l3], u_f, 0.4)
+    # solve([l1, l2, l3], u_f, 0.5)
+    # solve([l1, l2, l3], u_f, 0.6)
+
 
 
 
