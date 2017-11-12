@@ -396,9 +396,8 @@ def general_eig_solve(l, A, B):
     # print((B.dot(eigvecs)).T.dot(eigvecs))
     # print(eigvals)
     indx = 0
-    for v in eigvecs:
-        # plotting.plot_bases(v_old, v, eigvals[indx], indx)
-        indx+=1
+    plotting.plot_bases(v_old, eigvecs[19], eigvals[19], 19)
+    indx+=1
     return eigvals, eigvecs
 
 from scipy.optimize import linprog
@@ -443,11 +442,13 @@ def solve(levels, u_f, toll):
             tri += [n.point[:2]]
             count +=1
                 #tri.append((e.n2.point[:2], e.n1.point[:2], e.n3.point[:2], e.n2.point[:2]))
-        plotting.plot_path(tri, dom)
+        # plotting.plot_path(tri, dom)
     print("tol, nodes ",toll,", ",count)
+    return count
     # print(u)
     # print(N)
 
+import matplotlib.pyplot as plt
 def test():
     hierarchyLevel = 0
     #Level creation ok
@@ -478,23 +479,25 @@ def test():
     minNodeNum = Node.number - len(l3.nodes)
     #ignore the first 3 eigvecs, use the 5th, just because
     u_f = [[0 for x in range(len(X))] for y in range(len(Y))]
-    ev = V[:,2]
+    for i in range(19, 20):
+        ev = V[:,i]
 
-    for n in l3.nodes:
-        p1 = np.array([ ev[2*(n.id-minNodeNum)], ev[2*(n.id-minNodeNum)+1], 0 ])
-        u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)
+        for n in l3.nodes:
+            p1 = np.array([ ev[2*(n.id-minNodeNum)], ev[2*(n.id-minNodeNum)+1], 0 ])
+            u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)
 
-    plotting.plot(X,Y, u_f)
-    solve([l1, l2, l3], u_f, 0.0001)
-    solve([l1, l2, l3], u_f, 0.01)
-    solve([l1, l2, l3], u_f, 0.05)
-    solve([l1, l2, l3], u_f, 0.08)
-    solve([l1, l2, l3], u_f, 0.1)
-    solve([l1, l2, l3], u_f, 0.2)
-    solve([l1, l2, l3], u_f, 0.3)
-    solve([l1, l2, l3], u_f, 0.4)
-    solve([l1, l2, l3], u_f, 0.5)
-    solve([l1, l2, l3], u_f, 0.6)
+        #TRASH THIS CODE WHEN DONE WITH Tol vs # Nodes plot
+        plotting.plot(X,Y, u_f)
+        tolerances = [0.0001, 0.01, 0.05, 0.08, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7]
+        y =[]
+        for t in tolerances:
+            y.append(solve([l1, l2, l3], u_f, t))
+
+        plt.plot(tolerances, y)
+        plt.title("Level3-"+str(i))
+
+    plt.show()
+
 
 
 
