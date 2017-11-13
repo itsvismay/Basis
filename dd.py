@@ -396,7 +396,7 @@ def general_eig_solve(l, A, B):
     # print((B.dot(eigvecs)).T.dot(eigvecs))
     # print(eigvals)
     indx = 0
-    plotting.plot_bases(v_old, eigvecs[19], eigvals[19], 19)
+    # plotting.plot_bases(v_old, eigvecs[19], eigvals[19], 19)
     indx+=1
     return eigvals, eigvecs
 
@@ -417,9 +417,6 @@ def solve(levels, u_f, toll):
     epsilon = np.array([toll for k in range(2*N.shape[0])])
     bigU = epsilon + np.concatenate((u, -1*u), axis=0)
     bigN = np.concatenate((N, -1*N), axis=0)
-    print(epsilon.shape)
-    print(bigU.shape)
-    print(bigN.shape)
 
     res = linprog(c, A_ub = bigN, b_ub = bigU, options={"disp": True})
     # print(res)
@@ -434,72 +431,91 @@ def solve(levels, u_f, toll):
         else:
             res.x[i] = 0
 
-    count = 0
-    for lev  in NodesUsedByLevel:
-        tri = []
-        for n in lev:
-            # print(n.point)
-            tri += [n.point[:2]]
-            count +=1
-                #tri.append((e.n2.point[:2], e.n1.point[:2], e.n3.point[:2], e.n2.point[:2]))
-        # plotting.plot_path(tri, dom)
-    print("tol, nodes ",toll,", ",count)
-    return count
-    # print(u)
-    # print(N)
+
+    return NodesUsedByLevel
+
 
 import matplotlib.pyplot as plt
 def test():
-    hierarchyLevel = 0
-    #Level creation ok
-    numLevels = 2
     l1 = Level(dom)
-    assert(l1.depth == 0)
-
     l1.create_bases()
-
     l2 = l1.split()
     l2.create_bases()
-    #
     l3 = l2.split()
     l3.create_bases()
-
-    print("OK Level creation")
 
     # #TEST THE SOLVER
     # #create the function u(x)
     # u_f = [[(0.25*(x-4) - 0.25*y + 1) if x>=y else 0 for y in range(len(X))] for x in range(len(Y))]
-    # # u_f = [[(-0.25*x+2) if x>=y else 0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # # u_f = [[random.randint(0, 5) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # plotting.plot(X, Y, u_f)
-    # solve([l1, l2, l3], u_f)
-    # print("OK Solve")
+    # u_f = [[(-0.25*x+2) if x>=y else 0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    #u_f = [[random.randint(0, 5) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u_f = [[(x-2)**4 + (y-2)**4 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    plotting.plot(X, Y, u_f)
+    NodesUsedByLevel = solve([l1, l2, l3], u_f, 0.0001)
 
+    U = np.matrix(u_f)
+    print(np.allclose(U, U.T, atol=1e-2))
+    plot_delaunay_mesh(NodesUsedByLevel)
+
+def run_tolerance_vs_nodes_test():
+    l1 = Level(dom)
+    l1.create_bases()
+    l2 = l1.split()
+    l2.create_bases()
+    l3 = l2.split()
+    l3.create_bases()
     D, V = general_eig_solve(l3, l3.get_stiffness_matrix(), l3.get_mass_matrix())
+
     minNodeNum = Node.number - len(l3.nodes)
     #ignore the first 3 eigvecs, use the 5th, just because
     u_f = [[0 for x in range(len(X))] for y in range(len(Y))]
-    for i in range(19, 20):
-        ev = V[:,i]
 
+    for i in range(2, len(V)):
+        ev = V[:,i]
+        check_mode_symmetry(ev, l3)
         for n in l3.nodes:
             p1 = np.array([ ev[2*(n.id-minNodeNum)], ev[2*(n.id-minNodeNum)+1], 0 ])
             u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)
 
         #TRASH THIS CODE WHEN DONE WITH Tol vs # Nodes plot
-        plotting.plot(X,Y, u_f)
         tolerances = [0.0001, 0.01, 0.05, 0.08, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7]
         y =[]
         for t in tolerances:
-            y.append(solve([l1, l2, l3], u_f, t))
+            NodesUsedByLevel = solve([l1, l2, l3], u_f, t)
+            count = 0
+            for lev  in NodesUsedByLevel:
+                count += len(lev)
+            plot_delaunay_mesh(NodesUsedByLevel)
+            break
 
-        plt.plot(tolerances, y)
-        plt.title("Level3-"+str(i))
+            print("tol, nodes ",t,", ",count)
+            y.append(count)
 
+    return
+
+def plot_delaunay_mesh(NodesUsedByLevel):
+    from scipy.spatial import Delaunay
+
+    for lev in NodesUsedByLevel:
+        points = []
+        for n in lev:
+            points.append(n.point[:2])
+
+    points = np.array(points)
+    tri = Delaunay(points)
+    plt.triplot(points[:,0], points[:,1], tri.simplices.copy())
+    plt.plot(points[:,0], points[:,1], 'o')
     plt.show()
 
+def check_mode_symmetry(mode_vec, lev):
+    minNodeNum = Node.number - len(lev.nodes)
+    u_f = [[0 for x in range(len(X))] for y in range(len(Y))]
+    for n in lev.nodes:
+        p1 = np.array([ mode_vec[2*(n.id-minNodeNum)], mode_vec[2*(n.id-minNodeNum)+1], 0 ])
+        u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)
 
-
-
+    U = np.matrix(u_f)
+    print(np.allclose(U, U.T, atol=1e-2))
 
 test()
+# run_tolerance_vs_nodes_test()
