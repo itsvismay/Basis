@@ -25,6 +25,7 @@ class Node:
         self.basis = [[0 for i in range(Level.domain[1][0]) ] for j in range(Level.domain[1][0])]
         self.id = Node.number
         self.mass = 0
+        self.active = False
         Node.number+=1
 
     def __str__(self):
@@ -78,14 +79,16 @@ class Element:
     #class vars
     number = 0
 
-    def __init__(self, n1, n2, n3, l):
+    def __init__(self, n1, n2, n3, l, ancestorElement = None):
         #InstanceVariables
         self.level = l#hierarchy level
         self.n1 = n1#node1
         self.n2 = n2#node2
         self.n3 = n3#node3
         self.splitted = False
+        self.active = False
         self.id = Element.number
+        self.ancestor = ancestorElement
         Element.number +=1
 
         self.n1.in_elements.add(self)
@@ -93,9 +96,9 @@ class Element:
         self.n3.in_elements.add(self)
 
     def __str__(self):
-        return str(self.id)
+        return "str elem: "+str(self.id)
     def __repr__(self):
-        return str(self.id) + ", " + str(self.n1.point) + ", " + str(self.n2.point) + ", "+ str(self.n3.point)
+        return "repr: "+str(self.id)
 
     #Functions
     @staticmethod
@@ -190,10 +193,10 @@ class Element:
             nodedict[(self.n1.id, self.n3.id)] = pn1n3
             nodedict[(self.n3.id, self.n1.id)] = pn1n3
 
-        refined_elements.add(Element(pn1, pn1n3, pn1n2, self.level+1))
-        refined_elements.add(Element(pn2, pn1n2, pn2n3, self.level+1))
-        refined_elements.add(Element(pn3, pn1n3, pn2n3, self.level+1))
-        refined_elements.add(Element(pn1n3, pn2n3, pn1n2, self.level+1))
+        refined_elements.add(Element(pn1, pn1n3, pn1n2, self.level+1, self))
+        refined_elements.add(Element(pn2, pn1n2, pn2n3, self.level+1, self))
+        refined_elements.add(Element(pn3, pn1n3, pn2n3, self.level+1, self))
+        refined_elements.add(Element(pn1n3, pn2n3, pn1n2, self.level+1, self))
         self.splitted = True
 
         # print("Refined")
@@ -426,6 +429,7 @@ def solve(levels, u_f, toll):
         if (res.x[i]>0):
             res.x[i] = 1
             # print("used node id: ", nodes[i])
+            nodes[i].active = True
             NodesUsedByLevel[nodes[i].level].append(nodes[i])
             # plot(np.reshape(bases[i], (dom[1][0], dom[1][1])))
         else:
