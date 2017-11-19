@@ -9,12 +9,8 @@ import numpy as np
 import random
 
 import plotting
+import utilities as util
 
-dom = ((0,0),(5,5))
-
-X=np.arange(dom[0][0], dom[1][0], 1)#X matrix is 1 bigger than domain
-Y=np.arange(dom[0][1], dom[1][1], 1)#Y matrix is 1 bigger than domain
-X, Y = np.meshgrid(X, Y)
 
 class Node:
     #class variables
@@ -26,7 +22,7 @@ class Node:
         self.point = np.array([x, y, 0]) #location
         self.level = l #hierarchy level
         self.in_elements = set()  #this node is contained in elements
-        self.basis = [[0 for i in Y] for j in X]
+        self.basis = [[0 for i in range(Level.domain[1][0]) ] for j in range(Level.domain[1][0])]
         self.id = Node.number
         self.mass = 0
         Node.number+=1
@@ -63,8 +59,8 @@ class Node:
             # print(n1)
             # print(n2)
             # print(n3)
-            for x in range(dom[1][0]):
-                for y in range(dom[1][1]):
+            for x in range(Level.domain[1][0]):
+                for y in range(Level.domain[1][1]):
                     if(point_in_element(np.array([x,y, 0]), self.point, n2, n3)):
                         self.basis[x][y] = -1.0*(plane[0]*(x-n1[0]) + plane[1]*(y-n1[1]))/plane[2] + n1[2]
 
@@ -220,16 +216,20 @@ class Element:
 class Level:
     #class vars
     number = 0
+    domain = ((0, 0), (5, 5)) #default domain
 
-    def __init__(self, domain):
+    def __init__(self, d = None):
         #Instance Vars
-        self.domain = domain
         self.elements = set()
         self.nodes = set()
         self.splitnodedict = {}
         self.K = []
         self.M = []
         self.depth = Level.number
+
+        if d != None:
+            Level.domain = d
+
         if(Level.number == 0):
             self.create_level_one()
 
@@ -240,10 +240,10 @@ class Level:
         #Input: nothing
         #Output: Nothing
         #Use: Creates Level 0, only level 0
-        n1 = Node(dom[0][0], dom[0][1], Level.number)
-        n2 = Node(dom[1][0] -1, dom[0][1], Level.number)
-        n3 = Node(dom[1][0] -1, dom[1][1] -1, Level.number)
-        n4 = Node(dom[0][0], dom[1][1] -1, Level.number)
+        n1 = Node(Level.domain[0][0], Level.domain[0][1], Level.number)
+        n2 = Node(Level.domain[1][0] -1, Level.domain[0][1], Level.number)
+        n3 = Node(Level.domain[1][0] -1, Level.domain[1][1] -1, Level.number)
+        n4 = Node(Level.domain[0][0], Level.domain[1][1] -1, Level.number)
         assert(Node.getNumberOfNodes() == 4)
         assert(n3.id == 2)
         print("OK Node creation")
@@ -437,6 +437,11 @@ def solve(levels, u_f, toll):
 
 import matplotlib.pyplot as plt
 def test():
+    dom = ((0,0),(5,5))
+    X=np.arange(dom[0][0], dom[1][0], 1)#X matrix is 1 bigger than domain
+    Y=np.arange(dom[0][1], dom[1][1], 1)#Y matrix is 1 bigger than domain
+    X, Y = np.meshgrid(X, Y)
+
     l1 = Level(dom)
     l1.create_bases()
     l2 = l1.split()
@@ -455,9 +460,10 @@ def test():
 
     U = np.matrix(u_f)
     print(np.allclose(U, U.T, atol=1e-2))
-    plot_delaunay_mesh(NodesUsedByLevel)
+    plotting.plot_delaunay_mesh(NodesUsedByLevel)
 
 def run_tolerance_vs_nodes_test():
+    dom = ((0,0),(5,5))
     l1 = Level(dom)
     l1.create_bases()
     l2 = l1.split()
@@ -468,11 +474,11 @@ def run_tolerance_vs_nodes_test():
 
     minNodeNum = Node.number - len(l3.nodes)
     #ignore the first 3 eigvecs, use the 5th, just because
-    u_f = [[0 for x in range(len(X))] for y in range(len(Y))]
+    u_f = [[0 for x in range(dom[1][0])] for y in range(dom[1][1])]
 
     for i in range(2, len(V)):
         ev = V[:,i]
-        check_mode_symmetry(ev, l3)
+        util.check_mode_symmetry(ev, l3)
         for n in l3.nodes:
             p1 = np.array([ ev[2*(n.id-minNodeNum)], ev[2*(n.id-minNodeNum)+1], 0 ])
             u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)
@@ -485,7 +491,7 @@ def run_tolerance_vs_nodes_test():
             count = 0
             for lev  in NodesUsedByLevel:
                 count += len(lev)
-            plot_delaunay_mesh(NodesUsedByLevel)
+            plotting.plot_delaunay_mesh(NodesUsedByLevel)
             break
 
             print("tol, nodes ",t,", ",count)
@@ -493,29 +499,6 @@ def run_tolerance_vs_nodes_test():
 
     return
 
-def plot_delaunay_mesh(NodesUsedByLevel):
-    from scipy.spatial import Delaunay
 
-    for lev in NodesUsedByLevel:
-        points = []
-        for n in lev:
-            points.append(n.point[:2])
-
-    points = np.array(points)
-    tri = Delaunay(points)
-    plt.triplot(points[:,0], points[:,1], tri.simplices.copy())
-    plt.plot(points[:,0], points[:,1], 'o')
-    plt.show()
-
-def check_mode_symmetry(mode_vec, lev):
-    minNodeNum = Node.number - len(lev.nodes)
-    u_f = [[0 for x in range(len(X))] for y in range(len(Y))]
-    for n in lev.nodes:
-        p1 = np.array([ mode_vec[2*(n.id-minNodeNum)], mode_vec[2*(n.id-minNodeNum)+1], 0 ])
-        u_f[n.point[0]][n.point[1]] = np.linalg.norm(p1)
-
-    U = np.matrix(u_f)
-    print(np.allclose(U, U.T, atol=1e-2))
-
-test()
+# test()
 # run_tolerance_vs_nodes_test()

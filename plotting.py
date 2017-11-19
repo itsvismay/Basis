@@ -11,6 +11,21 @@ import math
 
 import matplotlib.animation as animation
 from matplotlib import collections as mc
+from scipy.spatial import Delaunay
+
+def plot_delaunay_mesh(NodesUsedByLevel):
+
+    for lev in NodesUsedByLevel:
+        points = []
+        for n in lev:
+            points.append(n.point[:2])
+
+    points = np.array(points)
+    tri = Delaunay(points)
+    plt.triplot(points[:,0], points[:,1], tri.simplices.copy())
+    plt.plot(points[:,0], points[:,1], 'o')
+    plt.show()
+
 def plot_bases(vo, v, l, indx, c="red"):
     def _update_plot(i, fig, scat, x, y):
         v_new = vo+ v*math.sin(math.sqrt(abs(l))*i)
