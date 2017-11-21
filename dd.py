@@ -23,6 +23,7 @@ class Node:
         self.level = l #hierarchy level
         self.in_elements = set()  #this node is contained in elements
         self.basis = [[0 for i in range(Level.domain[1][0]) ] for j in range(Level.domain[1][0])]
+        self.support_points = [[0 for i in range(Level.domain[1][0]) ] for j in range(Level.domain[1][0])]
         self.id = Node.number
         self.mass = 0
         self.active = False
@@ -54,7 +55,7 @@ class Node:
 
         def shape_with(n2, n3):
             n1 = np.array([self.point[0], self.point[1], 1]) #Set the z coord of self to be 1
-            plane = np.cross((n1 - n2), (n1 - n3))
+            normal = np.cross((n1 - n2), (n1 - n3))
             # print("in shape_with")
             # print(self.point)
             # print(n1)
@@ -63,8 +64,8 @@ class Node:
             for x in range(Level.domain[1][0]):
                 for y in range(Level.domain[1][1]):
                     if(point_in_element(np.array([x,y, 0]), self.point, n2, n3)):
-                        self.basis[x][y] = -1.0*(plane[0]*(x-n1[0]) + plane[1]*(y-n1[1]))/plane[2] + n1[2]
-
+                        self.basis[x][y] = -1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2]
+                        self.support_points[x][y] = 1
 
 
         for e in self.in_elements:
