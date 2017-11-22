@@ -30,7 +30,7 @@ class Node:
         Node.number+=1
 
     def __str__(self):
-        return str(self.id)
+        return str(self.id)+" "+str(self.point)
     def __repr__(self):
         return str(self.id)
 
@@ -83,9 +83,10 @@ class Element:
     def __init__(self, n1, n2, n3, l, ancestorElement = None):
         #InstanceVariables
         self.level = l#hierarchy level
-        self.n1 = n1#node1
-        self.n2 = n2#node2
-        self.n3 = n3#node3
+        node_list = sorted([n1, n2, n3], key=lambda x:x.id)
+        self.n1 = node_list[0]#node1
+        self.n2 = node_list[1]#node2
+        self.n3 = node_list[2]#node3
         self.splitted = False
         self.active = False
         self.id = Element.number
@@ -97,9 +98,9 @@ class Element:
         self.n3.in_elements.add(self)
 
     def __str__(self):
-        return "str elem: "+str(self.id)
+        return "str elem: "+str(self.id)+", "+str(self.n1)+" "+str(self.n2)+"  "+str(self.n3)
     def __repr__(self):
-        return "repr: "+str(self.id)
+        return "repr: "+str(self.id)+" "+str(self.n1.point)+" "+str(self.n2.point)+"  "+str(self.n3.point)
 
     #Functions
     @staticmethod
@@ -250,7 +251,6 @@ class Level:
         n4 = Node(Level.domain[0][0], Level.domain[1][1] -1, Level.number)
         assert(Node.getNumberOfNodes() == 4)
         assert(n3.id == 2)
-        print("OK Node creation")
 
         #Element creation ok
         e1 = Element(n1, n2, n3, Level.number)
@@ -259,7 +259,6 @@ class Level:
         assert(e2.id == 1)
         assert(not (e1 in n4.in_elements) and (e2 in n4.in_elements))
         assert((e1 in n1.in_elements) and (e2 in n1.in_elements))
-        print("OK Element creation")
 
         self.add_elements(set([e1]))
         self.add_elements(set([e2]))
