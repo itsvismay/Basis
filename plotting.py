@@ -13,6 +13,7 @@ import matplotlib.animation as animation
 from matplotlib import collections as mc
 from scipy.spatial import Delaunay
 
+
 def plot_delaunay_mesh(NodesUsedByLevel):
 
     for lev in NodesUsedByLevel:

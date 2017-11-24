@@ -6,6 +6,9 @@ import math
 
 from scipy.spatial import Delaunay
 np.set_printoptions(threshold="nan")
+import sys, os
+sys.path.insert(0, os.getcwd()+"/../libigl/python/")
+import pyigl as igl
 
 def Bs_(e):
     phi = set()
@@ -55,14 +58,12 @@ def slope_over_cell(b, e):
     return x_slope, y_slope
 
 
-
-
-def Integrate(b1, b2, e):
+def Integrate_K(K, map_node_id_to_index, b1, b2, e):
     #Using the stiffness matrix formula Kij from here:
     #https://en.wikiversity.org/wiki/Introduction_to_finite_elements/Axial_bar_finite_element_solution
     #except for 2 dimensions dx, dy
     A = e.get_area()
-    E = 1e-3 #Youngs mod
+    E = 1e-1 #Youngs mod
 
 
     #b1 slope over cell e
@@ -70,34 +71,109 @@ def Integrate(b1, b2, e):
     dB2_dx, dB2_dy = slope_over_cell(b2, e)
 
 
-    return 1
+    K[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] = A*E*dB1_dx*dB2_dx
+    K[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] = A*E*dB1_dy*dB2_dy
+
+
+def Integrate_f(f, map_node_id_to_index, b, e, x = None):
+    if(x == None):
+        return
+
+    if not basis_supports_cell(b, e):
+        return
+
+    p0 = np.array([b.point[0], b.point[1], 1])
+    p1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
+    p2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
+    p3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
+    a = p1 - p0
+    b = p2 - p0
+    c = p3 - p0
+    tet_vol = (1.0/6)*np.linalg.det(np.dot(a, np.cross(b, c)))
+    rec_vol = 0.0
+    if(p1[2] < p2[2]):
+        rec_vol += e.get_area()*p1[2]
+    else:
+        rec_vol += e.get_area()*p2[2]
+
+    vol = tet_vol + rec_vol
+
+    t = 1.0
+    a = 30
+    force_x = (t/(2*e.get_area()))*vol*a*x[map_node_id_to_index[b.id]]
+    force_y = (t/(2*e.get_area()))*vol*a*x[map_node_id_to_index[b.id]+1]
+
+    f[2*map_node_id_to_index[b.id]] = force_x
+    f[2*map_node_id_to_index[b.id]+1] = force_y
+
+
 
 #(section 3.3 CHARMS)
-def compute_stiffness_matrix_simple(K, B, hMesh):
+def compute_stiffness(f, K, B, hMesh, map_node_id_to_index, x = None):
 
     E = set()#set of active cells
     for n in B:
         E |= n.in_elements
+
 
     for e in E:
         Bs_e = Bs_(e)
         Ba_e = Ba_(e)
 
         for b in Bs_e:
+            Integrate_K(K, map_node_id_to_index, b, b, e)
+            Integrate_f(f, map_node_id_to_index, b, e, x)
 
-            K[b.id, b.id] = Integrate(b, b, e)
             Bs_eNotb = Bs_e - set([b])
-            Ba_e = Ba_(e)
             for phi in Bs_eNotb:
-                K[b.id, phi.id] = Integrate(b, phi, e)
-                K[phi.id, b.id] = Integrate(phi, b, e)
+                Integrate_K(K, map_node_id_to_index, b, phi, e)
+                Integrate_K(K, map_node_id_to_index, phi, b, e)
+                Integrate_f(f, map_node_id_to_index, phi, e, x)
 
             for phi in Ba_e:
-                K[b.id, phi.id] = Integrate(b, phi, e)
-                K[phi.id, b.id] = Integrate(phi, b, e)
+                Integrate_K(K, map_node_id_to_index, b, phi, e)
+                Integrate_K(K, map_node_id_to_index, phi, b, e)
+                Integrate_f(f, map_node_id_to_index, phi, e, x)
 
 
+def compute_force(f, B, map_node_id_to_index, x = None):
+    E = set()#set of active cells
+    for n in B:
+        E |= n.in_elements
 
+
+    for e in E:
+        Bs_e = Bs_(e)
+        Ba_e = Ba_(e)
+
+        for b in Bs_e:
+            Integrate_f(f, map_node_id_to_index, b, e, x)
+
+            Bs_eNotb = Bs_e - set([b])
+            for phi in Bs_eNotb:
+                Integrate_f(f, map_node_id_to_index, phi, e, x)
+
+            for phi in Ba_e:
+                Integrate_f(f, map_node_id_to_index, phi, e, x)
+
+def compute_mass(M, B, map_node_id_to_index, x = None):
+    E = set()#set of cells with active nodes
+    for n in B:
+        E |= n.in_elements
+
+
+    for e in E:
+        Bs_e = Bs_(e)
+        Ba_e = Ba_(e)
+
+        for b in Bs_e:
+            Integrate_M(M, map_node_id_to_index, b, e)
+
+            Bs_eNotb - Bs_e - set([b])
+            for phi in Bs_eNotb:
+                Integrate_M(M, map_node_id_to_index, b, e)
+
+            for
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
@@ -114,6 +190,12 @@ def get_active_nodes(hMesh, dom, tolerance = 0.0001):
 
     return aN
 
+def create_active_nodes_index_map(B):
+    d = {}
+    for i in range(len(B)):
+        d[B[i].id] = i
+
+    return d
 
 def start():
     dom = ((0,0),(5,5))
@@ -122,9 +204,24 @@ def start():
 
     flatB = [i for sublist in actNodes for i in sublist]
     sortedflatB = sorted(flatB, key=lambda x:x.id)
-    K = np.zeros((2*ref.Node.number, 2*ref.Node.number))
+    map_node_to_ind = create_active_nodes_index_map(sortedflatB)
 
-    compute_stiffness_matrix_simple(K, sortedflatB, hMesh)
-    # print(K)
+    K = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
+    f = np.zeros(2*len(sortedflatB))
+    compute_force_stiffness(f, K, sortedflatB, hMesh, map_node_to_ind)
+    print(K - K.T)
+
+
+
+
+
+def key_pressed(viewer, key, modifier):
+    pass
+
+def plot_sim():
+
+    viewer = igl.viewer.Viewer()
+    viewer.data.set_mesh()
+    viewer.launch()
 
 # start()

@@ -61,12 +61,25 @@ def test_slope_over_cell():
 
 
 
-def test2():
+def test_create_stiffness_matrix():
     dom = ((0,0), (5,5))
     hMesh = sim.get_hierarchical_mesh(dom)
+    print(hMesh[0].get_stiffness_matrix())
+    for n in hMesh[0].nodes:
+        n.active = True
+
+    sortedflatB = sorted(list(hMesh[0].nodes), key=lambda x: x.id)
+    map_k = sim.create_active_nodes_index_map(sortedflatB)
+    K = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
+    f = np.zeros(2*len(sortedflatB))
+    sim.compute_force_stiffness(f, K, sortedflatB, hMesh, map_k)
+    print(map_k)
+    print(K)
 
 
 # test_creation_of_levels()
 # test_Bs_Ba_()
 # test_basis_supports_cell()
-test_slope_over_cell()
+# test_slope_over_cell()
+test_create_stiffness_matrix()
+# test_original_stiffness_matrix()

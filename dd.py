@@ -130,8 +130,8 @@ class Element:
         D = np.matrix([[1-v, v, 0],
                     [ v, 1-v, 0],
                     [ 0, 0, 0.5 -v]])*(E/(1-v))
-
-        K = (np.transpose(Be)*D*Be)*1*self.get_area()
+        t = 1 #thickness of element
+        K = (np.transpose(Be)*D*Be)*t*self.get_area()
         # print(self.n1.id, "-", self.n1.point)
         # print(self.n2.id, "-", self.n2.point)
         # print(self.n3.id, "-", self.n3.point)
