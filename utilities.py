@@ -10,3 +10,10 @@ def check_mode_symmetry(mode_vec, lev):
 
     U = np.matrix(u_f)
     print(np.allclose(U, U.T, atol=1e-2))
+
+def is_invertible(H):
+    return H.shape[0]==H.shape[1] and np.linalg.matrix_rank(H) == H.shape[0]
+
+def is_pos_def(x):
+    print(np.linalg.eigvals(x))
+    return np.all(np.linalg.eigvals(x) >= 0)

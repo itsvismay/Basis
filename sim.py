@@ -1,6 +1,7 @@
 import numpy as np
 
 import dd as ref
+import utilities as utils
 import plotting as plt
 import math
 
@@ -60,6 +61,14 @@ def slope_over_cell(b, e):
     y_slope = -1.0*normal[1]/normal[2]
     return x_slope, y_slope
 
+#basis equation for b1 over element e
+def basis_value_over_e_at_xy(b, e, x, y):
+    n1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
+    n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
+    n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
+    normal = np.cross((n1 - n2), (n1 - n3))
+    z = -1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2]
+    return z
 
 def Integrate_K(K, map_node_id_to_index, b1, b2, e):
     #Using the stiffness matrix formula Kij from here:
@@ -76,6 +85,20 @@ def Integrate_K(K, map_node_id_to_index, b1, b2, e):
 
     K[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] = A*E*dB1_dx*dB2_dx
     K[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] = A*E*dB1_dy*dB2_dy
+
+
+def Integrate_M(M, map_node_id_to_index, b1, b2, e):
+    A = e.get_area()
+
+    #1 point gauss quadrature over centroid of triangle
+    centroid_x = (e.n1.point[0] + e.n2.point[0] + e.n3.point[0])/3.0
+    centroid_y = (e.n1.point[1] + e.n2.point[1] + e.n3.point[1])/3.0
+
+    mass = e.get_area()*basis_value_over_e_at_xy(b1, e, centroid_x, centroid_y)\
+                        *basis_value_over_e_at_xy(b2, e, centroid_x, centroid_y)
+
+    M[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += mass
+    M[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += mass
 
 
 def Integrate_f(f, map_node_id_to_index, b, e, x = None):
@@ -136,6 +159,29 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
                 Integrate_K(K, map_node_id_to_index, phi, b, e)
 
 
+def compute_mass(M, B, map_node_id_to_index):
+    E = set()#set of cells with active nodes
+    for n in B:
+        E |= n.in_elements
+
+
+    for e in E:
+        Bs_e = Bs_(e)
+        Ba_e = Ba_(e)
+
+        for b in Bs_e:
+            Integrate_M(M, map_node_id_to_index, b, b, e)
+
+            Bs_eNotb = Bs_e - set([b])
+            for phi in Bs_eNotb:
+                Integrate_M(M, map_node_id_to_index, b, phi, e)
+                Integrate_M(M, map_node_id_to_index, phi, b, e)
+
+            for phi in Ba_e:
+                Integrate_M(M, map_node_id_to_index, b, phi, e)
+                Integrate_M(M, map_node_id_to_index, phi, b, e)
+
+
 def compute_force(f, B, map_node_id_to_index, x = None):
     E = set()#set of active cells
     for n in B:
@@ -157,21 +203,6 @@ def compute_force(f, B, map_node_id_to_index, x = None):
                 Integrate_f(f, map_node_id_to_index, phi, e, x)
 
 
-def compute_mass(M, B, map_node_id_to_index):
-    E = set()#set of cells with active nodes
-    for n in B:
-        E |= n.in_elements
-
-
-    for e in E:
-        Bs_e = Bs_(e)
-        p = 1.0 #density
-        m = p*e.get_area()/len(Bs_e)#evenly spead mass over all nodes
-        for b in Bs_e:
-            M[2*map_node_id_to_index[b.id], 2*map_node_id_to_index[b.id]] += m
-            M[2*map_node_id_to_index[b.id]+1, 2*map_node_id_to_index[b.id]+1] += m
-
-
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
     l1.create_bases()
@@ -187,61 +218,83 @@ def get_active_nodes(hMesh, dom, tolerance = 0.0001):
 
     return aN
 
-def create_active_nodes_index_map(B):
-    d = {}
-    for i in range(len(B)):
-        d[B[i].id] = i
 
-    return d
+def create_active_nodes_index_map(N):
+    #remove remove_redundant_nodes
+    #always select the nodes in finer meshes first
+    d_p_b = {} #dictionary from point to basis
+    d_b_i = {} #dictionary from basis id to index for simulation: many -> 1
+    ind = 0
+    for l in range(len(N)-1, -1, -1):
+        # print([(b.id, b.point) for b in N[l]])
+        for b in N[l]:
+            p = (int(b.point[0]), int(b.point[1]))
+            if p not in d_p_b:
+                d_p_b[p] = b
+                d_b_i[b.id] = ind
+                ind+=1
+            else:
+                existing_ind = d_b_i[ d_p_b[p].id ]
+                d_b_i[b.id] = existing_ind
+
+
+    return ind, d_b_i
 
 def start():
     dom = ((0,0),(5,5))
     hMesh = get_hierarchical_mesh(dom)
     actNodes = get_active_nodes(hMesh, dom)
 
-    flatB = [i for sublist in actNodes for i in sublist]
-    sortedflatB = sorted(flatB, key=lambda x:x.id)
-    map_node_to_ind = create_active_nodes_index_map(sortedflatB)
+    vsize, map_node_to_ind = create_active_nodes_index_map(actNodes)
+    sortedflatB = [i for sublist in actNodes for i in sublist]
 
-    K = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
-    f = np.zeros(2*len(sortedflatB))
-    M = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
+    K = np.zeros((2*vsize, 2*vsize))
+    f = np.zeros(2*vsize)
+    M = np.zeros((2*vsize, 2*vsize))
 
 
     compute_stiffness( K, sortedflatB, hMesh, map_node_to_ind)
     compute_mass(M, sortedflatB, map_node_to_ind)
-    # print(K - K.T)
-    # print(M)
+    print(utils.is_invertible(M-1e-3*K))
+    print(utils.is_pos_def(M))
+    x = np.zeros(2*vsize)
+    v = np.zeros(2*vsize)
+    v[0] = 1
 
-    x = np.zeros(2*len(sortedflatB))
-    v = np.zeros(2*len(sortedflatB))
-    V = np.zeros((len(sortedflatB), 2))
+    V = np.zeros((vsize, 2))
+
 
     points = []
     #SET X initially
-    for i in range(len(sortedflatB)):
-        x[2*i] = sortedflatB[i].point[0]
-        x[2*i+1] = sortedflatB[i].point[1]
-        points.append(sortedflatB[i].point[:2])
+    for b in sortedflatB:
+        x[2*map_node_to_ind[b.id]] = b.point[0]
+        x[2*map_node_to_ind[b.id]+1] = b.point[1]
+        # print(b.id, "- ", map_node_to_ind[b.id], "- ", b.point)
 
-    points = np.array(points)
     def X_to_V(V, x):
         for i in range(V.shape[0]):
             V[i, 0] = x[2*i]
             V[i, 1] = x[2*i+1]
 
     X_to_V(V, x)
+
     tri = Delaunay(V)
-    plt.triplot(points[:,0], points[:,1], tri.simplices.copy())
-    plt.plot(points[:,0], points[:,1], 'o')
-    plt.show()
-
-
-
-    # def plot_sim():
-    #     while True:
-    #         renderer.render(V, [2, 9])
-
-    # plot_sim()
+    h = 1e-1
+    invMdtK = np.linalg.inv(M - h*h*K)
+    # for t in range(0, 200):
+    #     v = np.matmul(invMdtK, M).dot(v) + h*np.matmul(invMdtK, K).dot(x)
+    #     x = x + h*v
+    #     X_to_V(V, x)
+    #     plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
+    #     plt.plot(V[:,0], V[:,1], 'o')
+    #     plt.show()
+    #
+    #
+    #
+    # # def plot_sim():
+    # #     while True:
+    # #         renderer.render(V, [2, 9])
+    #
+    # # plot_sim()
 
 start()
