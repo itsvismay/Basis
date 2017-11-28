@@ -15,5 +15,5 @@ def is_invertible(H):
     return H.shape[0]==H.shape[1] and np.linalg.matrix_rank(H) == H.shape[0]
 
 def is_pos_def(x):
-    print(np.linalg.eigvals(x))
+    print(sorted(np.linalg.eigvals(x)))
     return np.all(np.linalg.eigvals(x) >= 0)

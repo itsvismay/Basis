@@ -24,11 +24,14 @@ def Bs_(e):
         phi.add(e.n3)
     return phi
 
-def Ba_(e):
-    e_a = e.ancestor
+def Ba_(e_a):
+    #recursively go through all ancestor
+    #to find the ancestral support set of bases
     if e_a == None:
         return set()
-    return Bs_(e_a)
+
+    b = Bs_(e_a) | Ba_(e_a.ancestor)
+    return b
 
 def basis_supports_cell(b, cell):
     # print(b)
@@ -144,7 +147,7 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
 
     for e in E:
         Bs_e = Bs_(e)
-        Ba_e = Ba_(e)
+        Ba_e = Ba_(e.ancestor)
 
         for b in Bs_e:
             Integrate_K(K, map_node_id_to_index, b, b, e)
@@ -167,7 +170,7 @@ def compute_mass(M, B, map_node_id_to_index):
 
     for e in E:
         Bs_e = Bs_(e)
-        Ba_e = Ba_(e)
+        Ba_e = Ba_(e.ancestor)
 
         for b in Bs_e:
             Integrate_M(M, map_node_id_to_index, b, b, e)
@@ -190,7 +193,7 @@ def compute_force(f, B, map_node_id_to_index, x = None):
 
     for e in E:
         Bs_e = Bs_(e)
-        Ba_e = Ba_(e)
+        Ba_e = Ba_(e.ancestor)
 
         for b in Bs_e:
             Integrate_f(f, map_node_id_to_index, b, e, x)
