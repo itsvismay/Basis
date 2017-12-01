@@ -107,6 +107,14 @@ class Element:
     def getNumberOfElements():
         return Element.number
 
+    def standardized_shape_matrix(self):
+        #Used for Change of Coordinates to the standard triangle
+        return np.matrix([[1, 0], [0, 1]])
+
+    def reference_shape_matrix(self):
+        return np.matrix([[self.n2.point[0] - self.n1.point[0], self.n3.point[0] - self.n1.point[0]], \
+                            [self.n2.point[1] - self.n1.point[1], self.n3.point[1] - self.n1.point[1]]])
+
     def get_area(self):
         #Input: nothing
         #Output: double
@@ -265,8 +273,9 @@ class Level:
         assert(e1 in self.elements)
         assert(e2 in self.elements)
 
-        self.get_mass_matrix()
-        self.get_stiffness_matrix()
+        # self.create_bases()
+        # self.get_mass_matrix()
+        # self.get_stiffness_matrix()
 
     def add_elements(self, elemts):
         #Input: a set of unique elements
@@ -294,6 +303,58 @@ class Level:
         # for n in nodes:
         #     print(np.array(n.basis))
 
+    #basis equation for b1 over element e
+    def basis_value_over_e_at_xy(self, b, e, x, y):
+        n1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
+        n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
+        n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
+        normal = np.cross((n1 - n2), (n1 - n3))
+        print(normal)
+        # print(e.n1.point)
+        # print(e.n2.point)
+        # print(e.n3.point)
+        # print(x,y)
+        z = -1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2]
+        # print(z)
+        return z
+
+    def GaussQuadrature_2d_3point(self, b, e):
+        print(b.basis)
+        print(e.n1.point)
+        print(e.n2.point)
+        print(e.n3.point)
+        #as defined here http://people.maths.ox.ac.uk/parsons/Specification.pdf
+        weights = [5.0/9.0, 8.0/9.0, 5.0/9.0]
+        #hard coded x, y points for the standard triangle
+        x_standard = [0.11270166537, 0.5, 0.88729833462]
+        y_standard = [[0.1, 0.44364916731, 0.78729833462], \
+                [0.05635083268 , 0.25, 0.44364916731],\
+                [0.01270166537 , 0.05635083268, 0.1]]
+
+        points_on_ref_tri = []
+
+        #Ref = F*Std
+        F = e.reference_shape_matrix()*np.linalg.inv(e.standardized_shape_matrix())
+        # print(e.standardized_shape_matrix())
+        # print(e.reference_shape_matrix())
+        # print("Hi")
+        # # print(F)
+        # # print(np.array([x_standard[1], y_standard[1][1]]))
+        # # print(F.dot(np.array([x_standard[1], y_standard[1][1]])))
+        tot = 0.0
+        for i in range(len(x_standard)):
+            for j in range(len(y_standard[i])):
+                p = F.dot(np.array([x_standard[i], y_standard[i][j]]))
+                tot += weights[i]*self.basis_value_over_e_at_xy(b, e, p[0,0], p[0,1])
+        print(0.5*tot)
+
+
+        print(points_on_ref_tri)
+
+
+
+
+
     def get_mass_matrix(self):
         if(len(self.M) != 0):
             return self.M
@@ -303,18 +364,21 @@ class Level:
             return self.M
 
         for e in self.elements:
-            element_mass = 1*(e.get_area()*1)/3.0
-            e.n1.mass += element_mass
-            e.n3.mass += element_mass
-            e.n2.mass += element_mass
+            centroid_x = (e.n1.point[0] + e.n2.point[0] + e.n3.point[0])/3.0
+            centroid_y = (e.n1.point[1] + e.n2.point[1] + e.n3.point[1])/3.0
+
+            # element_mass = 1*(e.get_area()*1)/3.0
+            e.n1.mass += e.get_area()*self.basis_value_over_e_at_xy(e.n1, e, centroid_x, centroid_y)*self.basis_value_over_e_at_xy(e.n1, e, centroid_x, centroid_y)
+            e.n2.mass += e.get_area()*self.basis_value_over_e_at_xy(e.n2, e, centroid_x, centroid_y)*self.basis_value_over_e_at_xy(e.n2, e, centroid_x, centroid_y)
+            e.n3.mass += e.get_area()*self.basis_value_over_e_at_xy(e.n3, e, centroid_x, centroid_y)*self.basis_value_over_e_at_xy(e.n3, e, centroid_x, centroid_y)
 
         massVec = []
-        for n in self.nodes:
+        for n in sorted(list(self.nodes), key=lambda x:x.id):
+            # print(n.id)
             massVec.append(n.mass)
             massVec.append(n.mass)
 
         self.M = np.diag(massVec)
-        # print(self.M)
         return self.M
 
 
@@ -374,6 +438,8 @@ class Level:
         for e in self.elements:
             lk.add_elements(e.split(self.splitnodedict))
 
+
+        lk.create_bases()
         lk.get_mass_matrix()
         lk.get_stiffness_matrix()
 

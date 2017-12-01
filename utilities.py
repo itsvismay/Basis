@@ -15,6 +15,14 @@ def is_invertible(H):
     return H.shape[0]==H.shape[1] and np.linalg.matrix_rank(H) == H.shape[0]
 
 def is_pos_def(x):
-    print(x)
     # print(sorted(np.linalg.eigvals(x)))
     return np.all(np.linalg.eigvals(x) >= 0)
+
+def volume_of_tet(n1, n2, n3, n4):
+    x = np.array([n1[0] - n4[0], n2[0] - n4[0], n3[0] - n4[0]])
+    y = np.array([n1[1] - n4[1], n2[1] - n4[1], n3[1] - n4[1]])
+    z = np.array([n1[2] - n4[2], n2[2] - n4[2], n3[2] - n4[2]])
+
+    Dm = np.matrix([x, y, z])
+    v = (1.0/6)*np.linalg.det(Dm)
+    return v

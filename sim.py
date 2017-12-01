@@ -2,11 +2,11 @@ import numpy as np
 
 import dd as ref
 import utilities as utils
-import plotting as plt
+import plotting as plot
 import math
 
 from scipy.spatial import Delaunay
-np.set_printoptions(threshold="nan")
+np.set_printoptions(threshold="nan", linewidth=190, precision=3, formatter={'all': lambda x:'{:2.2f}'.format(x)})
 import sys, os
 sys.path.insert(0, os.getcwd()+"/../libigl/python/")
 import pyigl as igl
@@ -97,9 +97,9 @@ def Integrate_M(M, map_node_id_to_index, b1, b2, e):
     centroid_x = (e.n1.point[0] + e.n2.point[0] + e.n3.point[0])/3.0
     centroid_y = (e.n1.point[1] + e.n2.point[1] + e.n3.point[1])/3.0
 
-    mass = e.get_area()*basis_value_over_e_at_xy(b1, e, centroid_x, centroid_y)\
-                        *basis_value_over_e_at_xy(b2, e, centroid_x, centroid_y)
+    mass = basis_value_over_e_at_xy(b1, e, centroid_x, centroid_y)*basis_value_over_e_at_xy(b2, e, centroid_x, centroid_y)*e.get_area()
 
+    print(map_node_id_to_index[b1.id], map_node_id_to_index[b2.id], mass)
     M[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += mass
     M[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += mass
 
@@ -165,6 +165,7 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
 def compute_mass(M, B, map_node_id_to_index):
     E = set()#set of cells with active nodes
     for n in B:
+        print(n.id, n.point)
         E |= n.in_elements
 
 
@@ -172,17 +173,21 @@ def compute_mass(M, B, map_node_id_to_index):
         Bs_e = Bs_(e)
         Ba_e = Ba_(e.ancestor)
 
+        print(len(Bs_e))
         for b in Bs_e:
-            Integrate_M(M, map_node_id_to_index, b, b, e)
+            # Integrate_M(M, map_node_id_to_index, b, b, e)
 
             Bs_eNotb = Bs_e - set([b])
             for phi in Bs_eNotb:
                 Integrate_M(M, map_node_id_to_index, b, phi, e)
                 Integrate_M(M, map_node_id_to_index, phi, b, e)
 
+
             for phi in Ba_e:
+                print("Ancestors")
                 Integrate_M(M, map_node_id_to_index, b, phi, e)
                 Integrate_M(M, map_node_id_to_index, phi, b, e)
+
 
 
 def compute_force(f, B, map_node_id_to_index, x = None):
@@ -208,11 +213,8 @@ def compute_force(f, B, map_node_id_to_index, x = None):
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
-    l1.create_bases()
     l2 = l1.split()
-    l2.create_bases()
     l3 = l2.split()
-    l3.create_bases()
     return [l1, l2, l3]
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001):
@@ -222,7 +224,14 @@ def get_active_nodes(hMesh, dom, tolerance = 0.0001):
     return aN
 
 
-def create_active_nodes_index_map(N):
+def create_active_nodes_index_map(B):
+    d = {}
+    for i in range(len(B)):
+        d[B[i].id] = i
+
+    return d
+
+def remove_duplicate_nodes_map(N):
     #remove remove_redundant_nodes
     #always select the nodes in finer meshes first
     d_p_b = {} #dictionary from point to basis
@@ -241,30 +250,35 @@ def create_active_nodes_index_map(N):
                 d_b_i[b.id] = existing_ind
 
 
-    return ind, d_b_i
+    return ind, d_b_i, d_p_b
 
 def start():
     dom = ((0,0),(5,5))
     hMesh = get_hierarchical_mesh(dom)
     actNodes = get_active_nodes(hMesh, dom)
 
-    vsize, map_node_to_ind = create_active_nodes_index_map(actNodes)
-    sortedflatB = [i for sublist in actNodes for i in sublist]
+    # plot.plot_delaunay_mesh([hMesh[2].nodes])
 
-    K = np.zeros((2*vsize, 2*vsize))
-    f = np.zeros(2*vsize)
-    M = np.zeros((2*vsize, 2*vsize))
+    nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = remove_duplicate_nodes_map(actNodes)
 
+    flatB = [i for sublist in actNodes for i in sublist]
+    sortedflatB = sorted(flatB, key=lambda x:x.id)
+    map_node_to_ind = create_active_nodes_index_map(sortedflatB)
+    dupSize = len(sortedflatB)
+
+    K = np.zeros((2*dupSize, 2*dupSize))
+    f = np.zeros(2*dupSize)
+    M = np.zeros((2*dupSize, 2*dupSize))
 
     compute_stiffness( K, sortedflatB, hMesh, map_node_to_ind)
     compute_mass(M, sortedflatB, map_node_to_ind)
     print(utils.is_invertible(M-1e-3*K))
     print(utils.is_pos_def(M))
-    x = np.zeros(2*vsize)
-    v = np.zeros(2*vsize)
+    x = np.zeros(2*dupSize)
+    v = np.zeros(2*dupSize)
     v[0] = 1
 
-    V = np.zeros((vsize, 2))
+    V = np.zeros((dupSize, 2))
 
 
     points = []
@@ -279,6 +293,9 @@ def start():
             V[i, 0] = x[2*i]
             V[i, 1] = x[2*i+1]
 
+    def zeroOutV(v):
+        sortedflatB
+
     X_to_V(V, x)
 
     tri = Delaunay(V)
@@ -291,13 +308,13 @@ def start():
     #     plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
     #     plt.plot(V[:,0], V[:,1], 'o')
     #     plt.show()
-    #
-    #
-    #
+
+
+
     # # def plot_sim():
     # #     while True:
     # #         renderer.render(V, [2, 9])
     #
     # # plot_sim()
 
-start()
+# start()

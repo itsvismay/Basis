@@ -3,6 +3,7 @@ import dd as ref
 import sim as sim
 
 import numpy as np
+import utilities as utils
 
 def test_creation_of_levels():
     dom = ((0,0), (5,5))
@@ -82,7 +83,7 @@ def test_create_stiffness_matrix():
 def test_create_mass_matrix():
     dom = ((0,0), (5,5))
     hMesh = sim.get_hierarchical_mesh(dom)
-    print(hMesh[0].get_mass_matrix())
+    # print(hMesh[0].get_mass_matrix())
     for n in hMesh[0].nodes:
         n.active = True
 
@@ -90,10 +91,34 @@ def test_create_mass_matrix():
     map_k = sim.create_active_nodes_index_map(sortedflatB)
     M = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     sim.compute_mass(M, sortedflatB, map_k)
+
+    print(hMesh[0].get_mass_matrix())
+    print("Mass SPD",utils.is_pos_def(hMesh[0].get_mass_matrix()))
+    print("")
     print(M)
+    # for r in M:
+    #     print(sum(r))
+
+
+def test_Gaussian_Quadrature():
+    l_trash = ref.Level()
+
+    n1 = ref.Node(0,0, 0)
+    n2 = ref.Node(4,0, 0)
+    n3 = ref.Node(0,4, 0)
+    e = ref.Element(n1, n2, n3, 0)
+
+    n1.update_basis()
+    n2.update_basis()
+    n3.update_basis()
+
+    print("QUAD CODE")
+    l_trash.GaussQuadrature_2d_3point(n1, e)
+
 # test_creation_of_levels()
 # test_Bs_Ba_()
 # test_basis_supports_cell()
 # test_slope_over_cell()
 # test_create_stiffness_matrix()
+test_Gaussian_Quadrature()
 # test_create_mass_matrix()
