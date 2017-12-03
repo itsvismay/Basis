@@ -120,15 +120,12 @@ def Integrate_M(M, map_node_id_to_index, b1, b2, e):
         for j in range(len(y_standard[i])):
             p = np.array(F.dot(np.array([x_standard[i], y_standard[i][j]])))[0]
             p = p + e.n1.point[:2]
-            # if(e.id==9):
-            #     print(np.array([x_standard[i], y_standard[i][j]]), p)
-            #     print(e.reference_shape_matrix())
-            #     print(e.n1.point, e.n1.id)
-            #     print(e.n2.point, e.n2.id)
-            #     print(e.n3.point, e.n3.id)
+
             m1 = basis_value_over_e_at_xy(b1, e, p[0], p[1])
             m2 = basis_value_over_e_at_xy(b2, e, p[0], p[1])
-            print(utils.PointInTriangle(p, e.n1.point, e.n2.point, e.n3.point))
+            if(not utils.PointInTriangle(p, e.n1.point, e.n2.point, e.n3.point)):
+                print("OH SHIT! Sim.py Integrate_M error, transformed pont not in triangle")
+                exit()
             tot += weights[i]*weights[j]*basis_value_over_e_at_xy(b1, e, p[0], p[1])*basis_value_over_e_at_xy(b2, e, p[0], p[1])
 
     mass = abs(np.linalg.det(F))*tot*(1.0/8) # multiply by det(F) = new area/ old area
@@ -206,13 +203,10 @@ def compute_mass(M, B, map_node_id_to_index):
 
 
     for e in E:
-        print("new Element --------------------------------")
-        print("\t",e.id, e.get_area())
         Bs_e = Bs_(e)
         Ba_e = Ba_(e.ancestor)
 
         for b in Bs_e:
-            # print("\t\t", b.id)
             Integrate_M(M, map_node_id_to_index, b, b, e)
 
             Bs_eNotb = Bs_e - set([b])
@@ -258,7 +252,7 @@ def get_hierarchical_mesh(dom):
 def get_active_nodes(hMesh, dom, tolerance = 0.0001):
     u_f = [[(x-2)**4 + (y-2)**4 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     aN = ref.solve(hMesh, u_f, tolerance)
-
+    # print(aN)
     return aN
 
 
@@ -356,4 +350,4 @@ def start():
     #
     # # plot_sim()
 
-# start()
+start()

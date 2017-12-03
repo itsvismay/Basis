@@ -84,10 +84,10 @@ def test_create_mass_matrix():
     dom = ((0,0), (5,5))
     hMesh = sim.get_hierarchical_mesh(dom)
     # print(hMesh[0].get_mass_matrix())
-    for n in hMesh[1].nodes:
+    for n in hMesh[2].nodes:
         n.active = True
 
-    sortedflatB = sorted(list(hMesh[1].nodes), key=lambda x: x.id)
+    sortedflatB = sorted(list(hMesh[2].nodes), key=lambda x: x.id)
     map_k = sim.create_active_nodes_index_map(sortedflatB)
     M = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     sim.compute_mass(M, sortedflatB, map_k)
@@ -124,4 +124,4 @@ def test_Gaussian_Quadrature():
 # test_slope_over_cell()
 # test_create_stiffness_matrix()
 # test_Gaussian_Quadrature()
-test_create_mass_matrix()
+# test_create_mass_matrix()
