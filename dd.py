@@ -112,8 +112,8 @@ class Element:
         return np.matrix([[1, 0], [0, 1]])
 
     def reference_shape_matrix(self):
-        return np.matrix([[self.n2.point[0] - self.n1.point[0], self.n3.point[0] - self.n1.point[0]], \
-                            [self.n2.point[1] - self.n1.point[1], self.n3.point[1] - self.n1.point[1]]])
+        return np.matrix([[self.n3.point[0] - self.n1.point[0], self.n2.point[0] - self.n1.point[0]], \
+                            [self.n3.point[1] - self.n1.point[1], self.n2.point[1] - self.n1.point[1]]])
 
     def get_area(self):
         #Input: nothing
@@ -273,7 +273,7 @@ class Level:
         assert(e1 in self.elements)
         assert(e2 in self.elements)
 
-        # self.create_bases()
+        self.create_bases()
         # self.get_mass_matrix()
         # self.get_stiffness_matrix()
 
@@ -308,23 +308,26 @@ class Level:
         n1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
         n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
         n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
+        # n1 = np.array([e.n1.point[0], e.n1.point[1], 0])
+        # n2 = np.array([e.n2.point[0], e.n2.point[1], 0])
+        # n3 = np.array([e.n3.point[0], e.n3.point[1], 0])
         normal = np.cross((n1 - n2), (n1 - n3))
-        print(normal)
-        # print(e.n1.point)
-        # print(e.n2.point)
-        # print(e.n3.point)
+
         # print(x,y)
         z = -1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2]
         # print(z)
         return z
 
+    def NormalTriangleQuadrature(self, b, e):
+        #divide into subtriangles, and sum with multiplying by area
+        pass
+
     def GaussQuadrature_2d_3point(self, b, e):
-        print(b.basis)
-        print(e.n1.point)
-        print(e.n2.point)
-        print(e.n3.point)
+        # b.basis = [[1 for i in range(5)] for j in range(5)]
+
         #as defined here http://people.maths.ox.ac.uk/parsons/Specification.pdf
-        weights = [5.0/9.0, 8.0/9.0, 5.0/9.0]
+        #weights = [5.0/9.0, 8.0/9.0, 5.0/9.0]#, [8.0/9.0, 8.0/9.0, 8.0/9.0], [5.0/9.0, 8.0/9.0, 5.0/9.0]]
+        weights = [1.0, 1.0, 1.0]
         #hard coded x, y points for the standard triangle
         x_standard = [0.11270166537, 0.5, 0.88729833462]
         y_standard = [[0.1, 0.44364916731, 0.78729833462], \
@@ -344,15 +347,18 @@ class Level:
         tot = 0.0
         for i in range(len(x_standard)):
             for j in range(len(y_standard[i])):
+                print(x_standard[i], y_standard[i][j])
+                print(i,j)
                 p = F.dot(np.array([x_standard[i], y_standard[i][j]]))
-                tot += weights[i]*self.basis_value_over_e_at_xy(b, e, p[0,0], p[0,1])
-        print(0.5*tot)
+                tot += weights[i]*weights[j]*self.basis_value_over_e_at_xy(b, e, p[0,0], p[0,1])
+
+        print(np.linalg.det(F)*tot*(1.0/8)) # multiply by det(F) = new area/ old area
+        print(tot)
+        print(np.linalg.det(F), e.get_area())
 
 
-        print(points_on_ref_tri)
-
-
-
+    def Mass_By_Quadrature(self, b1, b2, e):
+        pass
 
 
     def get_mass_matrix(self):

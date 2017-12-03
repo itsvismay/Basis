@@ -84,18 +84,19 @@ def test_create_mass_matrix():
     dom = ((0,0), (5,5))
     hMesh = sim.get_hierarchical_mesh(dom)
     # print(hMesh[0].get_mass_matrix())
-    for n in hMesh[0].nodes:
+    for n in hMesh[1].nodes:
         n.active = True
 
-    sortedflatB = sorted(list(hMesh[0].nodes), key=lambda x: x.id)
+    sortedflatB = sorted(list(hMesh[1].nodes), key=lambda x: x.id)
     map_k = sim.create_active_nodes_index_map(sortedflatB)
     M = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     sim.compute_mass(M, sortedflatB, map_k)
 
     print(hMesh[0].get_mass_matrix())
-    print("Mass SPD",utils.is_pos_def(hMesh[0].get_mass_matrix()))
+    print("Lumped Mass SPD",utils.is_pos_def(hMesh[0].get_mass_matrix()))
     print("")
     print(M)
+    print("Sim Mass SPD", utils.is_pos_def(M))
     # for r in M:
     #     print(sum(r))
 
@@ -104,8 +105,10 @@ def test_Gaussian_Quadrature():
     l_trash = ref.Level()
 
     n1 = ref.Node(0,0, 0)
-    n2 = ref.Node(4,0, 0)
-    n3 = ref.Node(0,4, 0)
+    n2 = ref.Node(1,0, 0)
+    n3 = ref.Node(0,1, 0)
+
+    print(utils.volume_of_tet([0,0,0], [1,0,0], [0,1,0], [0,0,0]))
     e = ref.Element(n1, n2, n3, 0)
 
     n1.update_basis()
@@ -120,5 +123,5 @@ def test_Gaussian_Quadrature():
 # test_basis_supports_cell()
 # test_slope_over_cell()
 # test_create_stiffness_matrix()
-test_Gaussian_Quadrature()
-# test_create_mass_matrix()
+# test_Gaussian_Quadrature()
+test_create_mass_matrix()

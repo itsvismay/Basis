@@ -70,7 +70,18 @@ def basis_value_over_e_at_xy(b, e, x, y):
     n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
     n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
     normal = np.cross((n1 - n2), (n1 - n3))
+
     z = -1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2]
+    # if(z<0):
+    #     print(e.id)
+    #     print(z)
+    #     print(b.basis)
+    #     print(normal)
+    #     print(x, y)
+    #     print(n1)
+    #     print(n2)
+    #     print(n3)
+
     return z
 
 def Integrate_K(K, map_node_id_to_index, b1, b2, e):
@@ -86,20 +97,45 @@ def Integrate_K(K, map_node_id_to_index, b1, b2, e):
     dB2_dx, dB2_dy = slope_over_cell(b2, e)
 
 
-    K[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] = A*E*dB1_dx*dB2_dx
-    K[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] = A*E*dB1_dy*dB2_dy
+    K[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += A*E*dB1_dx*dB2_dx
+    K[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += A*E*dB1_dy*dB2_dy
 
 
 def Integrate_M(M, map_node_id_to_index, b1, b2, e):
-    A = e.get_area()
+    #as defined here http://people.maths.ox.ac.uk/parsons/Specification.pdf
+    weights = [5.0/9.0, 8.0/9.0, 5.0/9.0]#, [8.0/9.0, 8.0/9.0, 8.0/9.0], [5.0/9.0, 8.0/9.0, 5.0/9.0]]
+    # weights = [1.0, 1.0, 1.0]
+    #hard coded x, y points for the standard triangle
+    x_standard = [0.11270166537, 0.5, 0.88729833462]
+    y_standard = [[0.1, 0.44364916731, 0.78729833462], \
+            [0.05635083268 , 0.25, 0.44364916731],\
+            [0.01270166537 , 0.05635083268, 0.1]]
 
-    #1 point gauss quadrature over centroid of triangle
-    centroid_x = (e.n1.point[0] + e.n2.point[0] + e.n3.point[0])/3.0
-    centroid_y = (e.n1.point[1] + e.n2.point[1] + e.n3.point[1])/3.0
+    points_on_ref_tri = []
 
-    mass = basis_value_over_e_at_xy(b1, e, centroid_x, centroid_y)*basis_value_over_e_at_xy(b2, e, centroid_x, centroid_y)*e.get_area()
+    #Ref = F*Std
+    F = e.reference_shape_matrix()*np.linalg.inv(e.standardized_shape_matrix())
+    tot = 0.0
+    for i in range(len(x_standard)):
+        for j in range(len(y_standard[i])):
+            p = np.array(F.dot(np.array([x_standard[i], y_standard[i][j]])))[0]
+            p = p + e.n1.point[:2]
+            # if(e.id==9):
+            #     print(np.array([x_standard[i], y_standard[i][j]]), p)
+            #     print(e.reference_shape_matrix())
+            #     print(e.n1.point, e.n1.id)
+            #     print(e.n2.point, e.n2.id)
+            #     print(e.n3.point, e.n3.id)
+            m1 = basis_value_over_e_at_xy(b1, e, p[0], p[1])
+            m2 = basis_value_over_e_at_xy(b2, e, p[0], p[1])
+            print(utils.PointInTriangle(p, e.n1.point, e.n2.point, e.n3.point))
+            tot += weights[i]*weights[j]*basis_value_over_e_at_xy(b1, e, p[0], p[1])*basis_value_over_e_at_xy(b2, e, p[0], p[1])
 
-    print(map_node_id_to_index[b1.id], map_node_id_to_index[b2.id], mass)
+    mass = abs(np.linalg.det(F))*tot*(1.0/8) # multiply by det(F) = new area/ old area
+    # print(mass)
+    # print(abs(np.linalg.det(F)), tot)
+
+    # print(map_node_id_to_index[b1.id], map_node_id_to_index[b2.id], mass)
     M[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += mass
     M[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += mass
 
@@ -163,19 +199,21 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
 
 
 def compute_mass(M, B, map_node_id_to_index):
+    print(map_node_id_to_index)
     E = set()#set of cells with active nodes
     for n in B:
-        print(n.id, n.point)
         E |= n.in_elements
 
 
     for e in E:
+        print("new Element --------------------------------")
+        print("\t",e.id, e.get_area())
         Bs_e = Bs_(e)
         Ba_e = Ba_(e.ancestor)
 
-        print(len(Bs_e))
         for b in Bs_e:
-            # Integrate_M(M, map_node_id_to_index, b, b, e)
+            # print("\t\t", b.id)
+            Integrate_M(M, map_node_id_to_index, b, b, e)
 
             Bs_eNotb = Bs_e - set([b])
             for phi in Bs_eNotb:
@@ -184,7 +222,7 @@ def compute_mass(M, B, map_node_id_to_index):
 
 
             for phi in Ba_e:
-                print("Ancestors")
+                "Ancestor"
                 Integrate_M(M, map_node_id_to_index, b, phi, e)
                 Integrate_M(M, map_node_id_to_index, phi, b, e)
 
@@ -272,8 +310,9 @@ def start():
 
     compute_stiffness( K, sortedflatB, hMesh, map_node_to_ind)
     compute_mass(M, sortedflatB, map_node_to_ind)
-    print(utils.is_invertible(M-1e-3*K))
-    print(utils.is_pos_def(M))
+    print("M - hK inverts", utils.is_invertible(M-1e-3*K))
+    print(M)
+    print("Mass is spd", utils.is_pos_def(M))
     x = np.zeros(2*dupSize)
     v = np.zeros(2*dupSize)
     v[0] = 1
