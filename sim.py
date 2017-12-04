@@ -305,7 +305,7 @@ def start():
     compute_stiffness( K, sortedflatB, hMesh, map_node_to_ind)
     compute_mass(M, sortedflatB, map_node_to_ind)
     print("M - hK inverts", utils.is_invertible(M-1e-3*K))
-    print(M)
+    # print(M)
     print("Mass is spd", utils.is_pos_def(M))
     x = np.zeros(2*dupSize)
     v = np.zeros(2*dupSize)
