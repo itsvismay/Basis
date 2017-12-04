@@ -201,22 +201,25 @@ def compute_mass(M, B, map_node_id_to_index):
     for n in B:
         E |= n.in_elements
 
-
+    print("len E", len(E))
     for e in E:
+        print("Element ", e.level, e.id)
         Bs_e = Bs_(e)
         Ba_e = Ba_(e.ancestor)
 
         for b in Bs_e:
+            print(" node ", b.id)
             Integrate_M(M, map_node_id_to_index, b, b, e)
 
             Bs_eNotb = Bs_e - set([b])
+            print("     Same lev ", len(Bs_eNotb))
             for phi in Bs_eNotb:
                 Integrate_M(M, map_node_id_to_index, b, phi, e)
                 Integrate_M(M, map_node_id_to_index, phi, b, e)
 
 
+            print("     Ancestors ", len(Ba_e))
             for phi in Ba_e:
-                "Ancestor"
                 Integrate_M(M, map_node_id_to_index, b, phi, e)
                 Integrate_M(M, map_node_id_to_index, phi, b, e)
 
