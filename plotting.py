@@ -13,6 +13,20 @@ import matplotlib.animation as animation
 from matplotlib import collections as mc
 from scipy.spatial import Delaunay
 
+def plot_nodes_only(NodesUsedByLevel):
+    x = []
+    y = []
+    for lev in NodesUsedByLevel:
+        points = []
+        for n in lev:
+            x.append(n.point[0])
+            y.append(n.point[1])
+
+    # points = np.array(points)
+    print(x,y,'o')
+
+    plt.plot(x, y, "o", color="red")
+    plt.show()
 
 def plot_delaunay_mesh(NodesUsedByLevel):
 
