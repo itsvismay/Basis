@@ -250,9 +250,15 @@ def get_hierarchical_mesh(dom):
     return [l1, l2, l3]
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001):
-    u_f = [[(x-2)**4 + (y-2)**4 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
+    n1 = l1_e[0]
+    n2 = l1_e[1]
+    n3 = l1_e[2]
+    n4 = l1_e[3]
+    u_f = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     aN = ref.solve(hMesh, u_f, tolerance)
     # print(aN)
+    # plot.plot_nodes_only(aN)
     return aN
 
 
@@ -330,10 +336,11 @@ def start():
         sortedflatB
 
     X_to_V(V, x)
+    print(V)
 
-    tri = Delaunay(V)
-    h = 1e-1
-    invMdtK = np.linalg.inv(M - h*h*K)
+    # tri = Delaunay(V)
+    # h = 1e-1
+    # invMdtK = np.linalg.inv(M - h*h*K)
     # for t in range(0, 200):
     #     v = np.matmul(invMdtK, M).dot(v) + h*np.matmul(invMdtK, K).dot(x)
     #     x = x + h*v
@@ -341,9 +348,9 @@ def start():
     #     plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
     #     plt.plot(V[:,0], V[:,1], 'o')
     #     plt.show()
-
-
-
+    #
+    #
+    #
     # # def plot_sim():
     # #     while True:
     # #         renderer.render(V, [2, 9])
