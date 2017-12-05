@@ -70,8 +70,10 @@ def basis_value_over_e_at_xy(b, e, x, y):
     n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
     n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
     normal = np.cross((n1 - n2), (n1 - n3))
-
+    # print(e)
+    # print(normal)
     z = -1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2]
+
     # if(z<0):
     #     print(e.id)
     #     print(z)
@@ -100,9 +102,36 @@ def Integrate_K(K, map_node_id_to_index, b1, b2, e):
     K[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += A*E*dB1_dx*dB2_dx
     K[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += A*E*dB1_dy*dB2_dy
 
+def AnotherQuadratureMethod(b1, b2, e):
+    DEPTH = 5
+    #Mentioned by Dave: Divide up the triangles into pieces,
+    #and integrate using 1 point quadrature, multiply by area
+    def break_up_triangle(p1, p2, p3, depth):
+        if(depth == 0):
+            area = np.linalg.norm(np.cross((p1 - p2), (p1 - p3)))*0.5
+            centroid_x = (p1[0] + p2[0] + p3[0])/3.0
+            centroid_y = (p1[1] + p2[1] + p3[1])/3.0
+            # print("AREA ",area)
+            # print("CENTROID ", centroid_x, centroid_y)
+            mass = basis_value_over_e_at_xy(b1, e, centroid_x, centroid_y)*basis_value_over_e_at_xy(b2, e, centroid_x, centroid_y)
+            # print("MASS", mass)
+            return mass*area
+        else:
+            centroid = np.array([(p1[0] + p2[0] + p3[0])/3.0, (p1[1] + p2[1] + p3[1])/3.0])
+            #tri 1
+            t1 = break_up_triangle(centroid, p1, p2, depth-1)
+            #tri 2
+            t2 = break_up_triangle(centroid, p1, p3, depth-1)
+            #tri 3
+            t3 = break_up_triangle(centroid, p3, p2, depth-1)
+            return t1+t2+t3
 
-def Integrate_M(M, map_node_id_to_index, b1, b2, e):
-    #as defined here http://people.maths.ox.ac.uk/parsons/Specification.pdf
+    total_mass = break_up_triangle(e.n1.point[:2], e.n2.point[:2], e.n3.point[:2], DEPTH)
+
+    return total_mass
+
+def GaussQuadrature(b1, b2, e):
+    #As defined here http://people.maths.ox.ac.uk/parsons/Specification.pdf
     weights = [5.0/9.0, 8.0/9.0, 5.0/9.0]#, [8.0/9.0, 8.0/9.0, 8.0/9.0], [5.0/9.0, 8.0/9.0, 5.0/9.0]]
     # weights = [1.0, 1.0, 1.0]
     #hard coded x, y points for the standard triangle
@@ -126,16 +155,20 @@ def Integrate_M(M, map_node_id_to_index, b1, b2, e):
             if(not utils.PointInTriangle(p, e.n1.point, e.n2.point, e.n3.point)):
                 print("OH SHIT! Sim.py Integrate_M error, transformed pont not in triangle")
                 exit()
-            tot += weights[i]*weights[j]*basis_value_over_e_at_xy(b1, e, p[0], p[1])*basis_value_over_e_at_xy(b2, e, p[0], p[1])
+            tot += weights[i]*weights[j]*m1*m2#*basis_value_over_e_at_xy(b1, e, p[0], p[1])*basis_value_over_e_at_xy(b2, e, p[0], p[1])
 
     mass = abs(np.linalg.det(F))*tot*(1.0/8) # multiply by det(F) = new area/ old area
-    # print(mass)
-    # print(abs(np.linalg.det(F)), tot)
+    return mass
+
+
+def Integrate_M(M, map_node_id_to_index, b1, b2, e):
+
+    mass = AnotherQuadratureMethod(b1, b2, e)
 
     # print(map_node_id_to_index[b1.id], map_node_id_to_index[b2.id], mass)
     M[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += mass
     M[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += mass
-
+    return mass
 
 def Integrate_f(f, map_node_id_to_index, b, e, x = None):
     if(x == None):
@@ -188,11 +221,9 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
             Bs_eNotb = Bs_e - set([b])
             for phi in Bs_eNotb:
                 Integrate_K(K, map_node_id_to_index, b, phi, e)
-                Integrate_K(K, map_node_id_to_index, phi, b, e)
 
             for phi in Ba_e:
                 Integrate_K(K, map_node_id_to_index, b, phi, e)
-                Integrate_K(K, map_node_id_to_index, phi, b, e)
 
 
 def compute_mass(M, B, map_node_id_to_index):
@@ -201,28 +232,18 @@ def compute_mass(M, B, map_node_id_to_index):
     for n in B:
         E |= n.in_elements
 
-    print("len E", len(E))
     for e in E:
-        print("Element ", e.level, e.id)
         Bs_e = Bs_(e)
         Ba_e = Ba_(e.ancestor)
-
         for b in Bs_e:
-            print(" node ", b.id)
             Integrate_M(M, map_node_id_to_index, b, b, e)
 
             Bs_eNotb = Bs_e - set([b])
-            print("     Same lev ", len(Bs_eNotb))
             for phi in Bs_eNotb:
                 Integrate_M(M, map_node_id_to_index, b, phi, e)
-                Integrate_M(M, map_node_id_to_index, phi, b, e)
 
-
-            print("     Ancestors ", len(Ba_e))
             for phi in Ba_e:
-                Integrate_M(M, map_node_id_to_index, b, phi, e)
-                Integrate_M(M, map_node_id_to_index, phi, b, e)
-
+                m1 = Integrate_M(M, map_node_id_to_index, b, phi, e)
 
 
 def compute_force(f, B, map_node_id_to_index, x = None):
@@ -341,23 +362,23 @@ def start():
     X_to_V(V, x)
     print(V)
 
-    # tri = Delaunay(V)
-    # h = 1e-1
-    # invMdtK = np.linalg.inv(M - h*h*K)
-    # for t in range(0, 200):
-    #     v = np.matmul(invMdtK, M).dot(v) + h*np.matmul(invMdtK, K).dot(x)
-    #     x = x + h*v
-    #     X_to_V(V, x)
-    #     plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
-    #     plt.plot(V[:,0], V[:,1], 'o')
-    #     plt.show()
-    #
-    #
-    #
-    # # def plot_sim():
-    # #     while True:
-    # #         renderer.render(V, [2, 9])
-    #
-    # # plot_sim()
+    tri = Delaunay(V)
+    h = 1e-1
+    invMdtK = np.linalg.inv(M - h*h*K)
+    for t in range(0, 200):
+        v = np.matmul(invMdtK, M).dot(v) + h*np.matmul(invMdtK, K).dot(x)
+        x = x + h*v
+        X_to_V(V, x)
+        plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
+        plt.plot(V[:,0], V[:,1], 'o')
+        plt.show()
+
+
+
+    # def plot_sim():
+    #     while True:
+    #         renderer.render(V, [2, 9])
+
+    # plot_sim()
 
 start()

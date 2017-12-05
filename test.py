@@ -84,10 +84,11 @@ def test_create_mass_matrix():
     dom = ((0,0), (5,5))
     hMesh = sim.get_hierarchical_mesh(dom)
     # print(hMesh[0].get_mass_matrix())
-    for n in hMesh[2].nodes:
+    for n in hMesh[0].nodes:
         n.active = True
 
-    sortedflatB = sorted(list(hMesh[2].nodes), key=lambda x: x.id)
+
+    sortedflatB = sorted(list(hMesh[0].nodes), key=lambda x: x.id)
     map_k = sim.create_active_nodes_index_map(sortedflatB)
     M = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     sim.compute_mass(M, sortedflatB, map_k)
@@ -118,10 +119,34 @@ def test_Gaussian_Quadrature():
     print("QUAD CODE")
     l_trash.GaussQuadrature_2d_3point(n1, e)
 
+def test_Another_Quadrature_Method():
+    l_trash = ref.Level()
+
+    n1 = ref.Node(0,0, 0)
+    n2 = ref.Node(4,0, 0)
+    n3 = ref.Node(0,4, 0)
+    e = ref.Element(n1, n2, n3, 0)
+
+    n1.update_basis()
+    n2.update_basis()
+    n3.update_basis()
+
+    # n1.basis = [[1 for i in range(5)] for j in range(5)]
+    # n2.basis = [[1 for i in range(5)] for j in range(5)]
+    # n3.basis = [[1 for i in range(5)] for j in range(5)]
+    print("MAKE SURE TO REMOVE THE SECOND BASIS TERM IN THE SUM w*b1*b2")
+
+    print("VOL ", utils.volume_of_tet([0,0,0], [4,0,0], [0,4,0], [0,0,1]))
+    m1 = sim.AnotherQuadratureMethod(n2, n3, e)
+    print("ANOTHER QUAD METHOD: ",m1)
+    # m2 = sim.GaussQuadrature(n3, n3, e)
+    # print("GAUSS QUAD: ", m2)
+
 # test_creation_of_levels()
 # test_Bs_Ba_()
 # test_basis_supports_cell()
 # test_slope_over_cell()
 # test_create_stiffness_matrix()
 # test_Gaussian_Quadrature()
-# test_create_mass_matrix()
+test_create_mass_matrix()
+test_Another_Quadrature_Method()

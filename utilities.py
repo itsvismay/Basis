@@ -24,10 +24,10 @@ def volume_of_tet(n1, n2, n3, n4):
     x = np.array([n1[0] - n4[0], n2[0] - n4[0], n3[0] - n4[0]])
     y = np.array([n1[1] - n4[1], n2[1] - n4[1], n3[1] - n4[1]])
     z = np.array([n1[2] - n4[2], n2[2] - n4[2], n3[2] - n4[2]])
-    print(n1, n2, n3, n4)
+    # print(n1, n2, n3, n4)
     Dm = np.matrix([x, y, z])
     v = (1.0/6)*np.linalg.det(Dm)
-    print(np.linalg.det(Dm))
+    # print(np.linalg.det(Dm))
     return v
 
 def PointInTriangle(pt, v1, v2, v3):
