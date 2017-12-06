@@ -62,6 +62,7 @@ def slope_over_cell(b, e):
     #z = d + m x + n y
     x_slope = -1.0*normal[0]/normal[2]
     y_slope = -1.0*normal[1]/normal[2]
+    # print("-----------", b.id, x_slope, y_slope)
     return x_slope, y_slope
 
 #basis equation for b1 over element e
@@ -91,16 +92,18 @@ def Integrate_K(K, map_node_id_to_index, b1, b2, e):
     #https://en.wikiversity.org/wiki/Introduction_to_finite_elements/Axial_bar_finite_element_solution
     #except for 2 dimensions dx, dy
     A = e.get_area()
-    E = 30e6 #Youngs mod
-
+    E = 1e1 #Youngs mod
+    # print("i, j", b1.id, b2.id)
 
     #b1 slope over cell e
     dB1_dx, dB1_dy = slope_over_cell(b1, e)
     dB2_dx, dB2_dy = slope_over_cell(b2, e)
+    amountx = A*E*dB1_dx*dB2_dx
+    amounty = A*E*dB1_dy*dB2_dy
+    # print(amountx, amounty)
 
-
-    K[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += A*E*dB1_dx*dB2_dx
-    K[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += A*E*dB1_dy*dB2_dy
+    K[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += amountx
+    K[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += amounty
 
 def AnotherQuadratureMethod(b1, b2, e):
     DEPTH = 5
@@ -160,7 +163,6 @@ def GaussQuadrature(b1, b2, e):
     mass = abs(np.linalg.det(F))*tot*(1.0/8) # multiply by det(F) = new area/ old area
     return mass
 
-
 def Integrate_M(M, map_node_id_to_index, b1, b2, e):
 
     mass = AnotherQuadratureMethod(b1, b2, e)
@@ -171,7 +173,7 @@ def Integrate_M(M, map_node_id_to_index, b1, b2, e):
     return mass
 
 def Integrate_f(f, map_node_id_to_index, b, e, x = None):
-    if(x == None):
+    if(x is None):
         return
 
     if not basis_supports_cell(b, e):
@@ -181,10 +183,8 @@ def Integrate_f(f, map_node_id_to_index, b, e, x = None):
     p1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
     p2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
     p3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
-    a = p1 - p0
-    b = p2 - p0
-    c = p3 - p0
-    tet_vol = (1.0/6)*np.linalg.det(np.dot(a, np.cross(b, c)))
+
+    tet_vol = (1.0/6)*utils.volume_of_tet(p0, p1, p2, p3)
     rec_vol = 0.0
     if(p1[2] < p2[2]):
         rec_vol += e.get_area()*p1[2]
@@ -201,8 +201,6 @@ def Integrate_f(f, map_node_id_to_index, b, e, x = None):
     f[2*map_node_id_to_index[b.id]] = force_x
     f[2*map_node_id_to_index[b.id]+1] = force_y
 
-
-
 #(section 3.3 CHARMS)
 def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
 
@@ -215,16 +213,18 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
         Bs_e = Bs_(e)
         Ba_e = Ba_(e.ancestor)
 
+        # print("Element", e.id, "Nodes ", Bs_e)
         for b in Bs_e:
             Integrate_K(K, map_node_id_to_index, b, b, e)
 
             Bs_eNotb = Bs_e - set([b])
             for phi in Bs_eNotb:
+
                 Integrate_K(K, map_node_id_to_index, b, phi, e)
 
             for phi in Ba_e:
                 Integrate_K(K, map_node_id_to_index, b, phi, e)
-        return
+
 
 def compute_mass(M, B, map_node_id_to_index):
     print(map_node_id_to_index)
@@ -274,7 +274,12 @@ def get_hierarchical_mesh(dom):
     return [l1, l2, l3]
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001):
-    uf = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
+    n1 = l1_e[0]
+    n2 = l1_e[1]
+    n3 = l1_e[2]
+    n4 = l1_e[3]
+    u_f = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u_f = [[x**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     aN = ref.solve(hMesh, u_f, tolerance)
     # print(aN)
@@ -335,7 +340,7 @@ def start():
     print("Mass is spd", utils.is_pos_def(M))
     x = np.zeros(2*dupSize)
     v = np.zeros(2*dupSize)
-    v[0] = 1
+    v[0] = 0
 
     V = np.zeros((dupSize, 2))
 
@@ -361,13 +366,24 @@ def start():
     tri = Delaunay(V)
     h = 1e-1
     invMdtK = np.linalg.inv(M - h*h*K)
+    invM = np.linalg.inv(M)
+    print(K.dot(x))
+    compute_force(f, sortedflatB, map_node_to_ind, x)
+    print(f)
+    # K = hMesh[0].K
+
+
     for t in range(0, 200):
-        v = np.matmul(invMdtK, M).dot(v) + h*np.matmul(invMdtK, K).dot(x)
         x = x + h*v
+        print(x)
+        v = v + h*np.matmul(invM, K).dot(x)
+        print(v)
+        # exit()
         X_to_V(V, x)
         plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
         plt.plot(V[:,0], V[:,1], 'o')
         plt.show()
+
 
 
 
@@ -377,4 +393,4 @@ def start():
 
     # plot_sim()
 
-# start()
+start()

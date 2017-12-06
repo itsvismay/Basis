@@ -69,6 +69,7 @@ def test_create_stiffness_matrix():
     for n in hMesh[0].nodes:
         n.active = True
 
+    print("Stiffness matrix")
     # K_1 = hMesh[0].get_stiffness_matrix();
     print(hMesh[0].K)
 
@@ -77,6 +78,7 @@ def test_create_stiffness_matrix():
     K = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     f = np.zeros(2*len(sortedflatB))
     M = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
+    print("Hierarchical Stiffness")
     sim.compute_stiffness(K, sortedflatB, hMesh, map_k)
     print(map_k)
     print(K)

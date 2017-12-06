@@ -122,6 +122,7 @@ class Element:
         return np.linalg.norm(np.cross((self.n1.point - self.n2.point), (self.n1.point - self.n3.point)))*0.5
 
     def compute_stiffness(self):
+        #Reference Links
         #https://femmatlab.wordpress.com/2015/04/24/triangle-elements-stiffness-matrix/
         #http://www.civil.egmu.net/wonsiri/fe6.pdf
         J11 = 1.1*self.n1.point[0] - self.n3.point[0]
@@ -133,16 +134,19 @@ class Element:
                         [0, -1*J21, 0, J11, 0, J21-J11],
                         [-1*J21, J22, J11, -1*J12, J21-J11, -1*J22+J12]])*(1.0/np.linalg.det(J))
 
-        E = 30e6
-        v = 0.5
+        E = 1e1
+        v = 1
         D = np.matrix([[1-v, v, 0],
-                    [ v, 1-v, 0],
-                    [ 0, 0, 0.5 -v]])*(E/(1-v))
+                        [ v, 1-v, 0],
+                        [ 0, 0, 0.5 -v]])*(E/((1+v)*(1-2*v)))
+
         t = 1 #thickness of element
         K = (np.transpose(Be)*D*Be)*t*self.get_area()
         # print(self.n1.id, "-", self.n1.point)
         # print(self.n2.id, "-", self.n2.point)
         # print(self.n3.id, "-", self.n3.point)
+        # print("E: ", self.id, "Nodes ", self.n1.id, self.n2.id, self.n3.id)
+        # print(Be)
         # print(K)
         # [[0.05 0.00 -0.05 0.05 0.00 -0.05]
         #  [0.00 0.00 0.00 0.00 0.00 0.00]
@@ -453,6 +457,8 @@ class Level:
 
 
         lk.create_bases()
+
+        #TODO: Uncomment this
         lk.get_mass_matrix()
         lk.get_stiffness_matrix()
 
