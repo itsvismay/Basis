@@ -91,7 +91,7 @@ def Integrate_K(K, map_node_id_to_index, b1, b2, e):
     #https://en.wikiversity.org/wiki/Introduction_to_finite_elements/Axial_bar_finite_element_solution
     #except for 2 dimensions dx, dy
     A = e.get_area()
-    E = 1e-1 #Youngs mod
+    E = 30e6 #Youngs mod
 
 
     #b1 slope over cell e
@@ -224,7 +224,7 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
 
             for phi in Ba_e:
                 Integrate_K(K, map_node_id_to_index, b, phi, e)
-
+        return
 
 def compute_mass(M, B, map_node_id_to_index):
     print(map_node_id_to_index)
@@ -274,7 +274,7 @@ def get_hierarchical_mesh(dom):
     return [l1, l2, l3]
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001):
-    n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    uf = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u_f = [[x**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     aN = ref.solve(hMesh, u_f, tolerance)
     # print(aN)
@@ -377,4 +377,4 @@ def start():
 
     # plot_sim()
 
-start()
+# start()

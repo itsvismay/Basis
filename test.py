@@ -69,16 +69,17 @@ def test_create_stiffness_matrix():
     for n in hMesh[0].nodes:
         n.active = True
 
+    # K_1 = hMesh[0].get_stiffness_matrix();
+    print(hMesh[0].K)
+
     sortedflatB = sorted(list(hMesh[0].nodes), key=lambda x: x.id)
     map_k = sim.create_active_nodes_index_map(sortedflatB)
     K = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     f = np.zeros(2*len(sortedflatB))
     M = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     sim.compute_stiffness(K, sortedflatB, hMesh, map_k)
-    sim.compute_mass(M, sortedflatB, map_k)
     print(map_k)
     print(K)
-    print(M)
 
 def test_create_mass_matrix():
     dom = ((0,0), (5,5))
@@ -146,7 +147,7 @@ def test_Another_Quadrature_Method():
 # test_Bs_Ba_()
 # test_basis_supports_cell()
 # test_slope_over_cell()
-# test_create_stiffness_matrix()
+test_create_stiffness_matrix()
 # test_Gaussian_Quadrature()
-test_create_mass_matrix()
-test_Another_Quadrature_Method()
+# test_create_mass_matrix()
+# test_Another_Quadrature_Method()

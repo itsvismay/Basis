@@ -133,8 +133,8 @@ class Element:
                         [0, -1*J21, 0, J11, 0, J21-J11],
                         [-1*J21, J22, J11, -1*J12, J21-J11, -1*J22+J12]])*(1.0/np.linalg.det(J))
 
-        E = 1e+1
-        v = 0.35
+        E = 30e6
+        v = 0.5
         D = np.matrix([[1-v, v, 0],
                     [ v, 1-v, 0],
                     [ 0, 0, 0.5 -v]])*(E/(1-v))
@@ -144,6 +144,13 @@ class Element:
         # print(self.n2.id, "-", self.n2.point)
         # print(self.n3.id, "-", self.n3.point)
         # print(K)
+        # [[0.05 0.00 -0.05 0.05 0.00 -0.05]
+        #  [0.00 0.00 0.00 0.00 0.00 0.00]
+        #  [-0.05 0.00 0.05 -0.05 0.00 0.05]
+        #  [0.05 0.00 -0.05 0.05 0.00 -0.05]
+        #  [0.00 0.00 0.00 0.00 0.00 0.00]
+        #  [-0.05 0.00 0.05 -0.05 0.00 0.05]]
+
         return K
 
 
@@ -274,8 +281,8 @@ class Level:
         assert(e2 in self.elements)
 
         self.create_bases()
-        # self.get_mass_matrix()
-        # self.get_stiffness_matrix()
+        self.get_mass_matrix()
+        self.get_stiffness_matrix()
 
     def add_elements(self, elemts):
         #Input: a set of unique elements
