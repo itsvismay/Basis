@@ -61,8 +61,8 @@ def slope_over_cell(b, e):
     #a(x - x0) + b(y - y0) + c(z - z0) = 0,
     #a x + b y + c z = d    and
     #z = d + m x + n y
-    x_slope = -1.0*normal[0]/normal[2]
-    y_slope = -1.0*normal[1]/normal[2]
+    x_slope = -1.0*normal[0]/(normal[2])/(2*e.get_area())
+    y_slope = -1.0*normal[1]/(normal[2])/(2*e.get_area())
     # print("-----------", b.id, x_slope, y_slope)
     return x_slope, y_slope
 
@@ -294,6 +294,7 @@ def get_hierarchical_mesh(dom):
     l2 = l1.split()
     l3 = l2.split()
     return [l1, l2, l3]
+    # return [l1]
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001):
     l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
@@ -362,7 +363,8 @@ def start():
     print("Mass is spd", utils.is_pos_def(M))
     x = np.zeros(2*dupSize)
     v = np.zeros(2*dupSize)
-    v[0] = 0
+    v[0] = 5
+    # v[4] = -1
 
     V = np.zeros((dupSize, 2))
 
@@ -386,25 +388,26 @@ def start():
     print(V)
 
     tri = Delaunay(V)
-    h = 1e-1
+    h = 1e-5
     invMdtK = np.linalg.inv(M - h*h*K)
     invM = np.linalg.inv(M)
     print(K.dot(x))
     compute_force(f, sortedflatB, map_node_to_ind, x)
     print(f)
-    # K = hMesh[0].K
+    K = -1*K
 
-
-    # for t in range(0, 200):
-    #     x = x + h*v
-    #     print(x)
-    #     v = v + h*np.matmul(invM, K).dot(x)
-    #     print(v)
-    #     # exit()
-    #     X_to_V(V, x)
-    #     plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
-    #     plt.plot(V[:,0], V[:,1], 'o')
-    #     plt.show()
+    p = x
+    for t in range(0, 20000):
+        p = p + h*v
+        print("p ", p)
+        v = v + h*np.matmul(invM, K).dot(p-x)
+        print("v ",v)
+        # exit()
+        X_to_V(V, p)
+        if(t%200 == 0):
+            plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
+            plt.plot(V[:,0], V[:,1], 'o')
+            plt.show()
 
 
 
@@ -415,4 +418,4 @@ def start():
 
     # plot_sim()
 
-# start()
+start()

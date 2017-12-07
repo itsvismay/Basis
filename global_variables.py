@@ -1,3 +1,3 @@
 
-Global_Youngs = 1e1
-Global_Poissons = 1
+Global_Youngs = 30e6
+Global_Poissons = 0.45
