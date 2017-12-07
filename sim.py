@@ -10,6 +10,7 @@ np.set_printoptions(threshold="nan", linewidth=190, precision=3, formatter={'all
 import sys, os
 sys.path.insert(0, os.getcwd()+"/../libigl/python/")
 import pyigl as igl
+import global_variables as GV
 # import render as renderer
 
 import matplotlib.pyplot as plt
@@ -201,6 +202,12 @@ def Integrate_f(f, map_node_id_to_index, b, e, x = None):
     f[2*map_node_id_to_index[b.id]] = force_x
     f[2*map_node_id_to_index[b.id]+1] = force_y
 
+def get_local_B(b, e):
+    dB_dx, dB_dy = slope_over_cell(b, e)
+    return np.matrix([[dB_dx, 0],
+                    [0, dB_dy],
+                    [dB_dy, dB_dx]])
+
 #(section 3.3 CHARMS)
 def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
 
@@ -208,22 +215,37 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
     for n in B:
         E |= n.in_elements
 
+    D = np.matrix([[1-GV.Global_Poissons, GV.Global_Poissons, 0],
+                    [ GV.Global_Poissons, 1-GV.Global_Poissons, 0],
+                    [ 0, 0, 0.5 -GV.Global_Poissons]])*(GV.Global_Youngs/((1+GV.Global_Poissons)*(1-2*GV.Global_Poissons)))
+
+    t = 1 #thickness of element
 
     for e in E:
-        Bs_e = Bs_(e)
-        Ba_e = Ba_(e.ancestor)
+        Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)
+        Ba_e = sorted(list(Ba_(e.ancestor)), key = lambda x: x.id)
 
-        # print("Element", e.id, "Nodes ", Bs_e)
-        for b in Bs_e:
-            Integrate_K(K, map_node_id_to_index, b, b, e)
+        Be = np.matrix([]).reshape(3, 0)
+        # print(Be)
+        for b in Bs_e+Ba_e:
+            Be = np.concatenate((Be, get_local_B(b, e)), axis=1)
 
-            Bs_eNotb = Bs_e - set([b])
-            for phi in Bs_eNotb:
+        local_K = (np.transpose(Be)*D*Be)*t*e.get_area()
 
-                Integrate_K(K, map_node_id_to_index, b, phi, e)
+        indices = [map_node_id_to_index[b.id] for b in Bs_e+Ba_e]
 
-            for phi in Ba_e:
-                Integrate_K(K, map_node_id_to_index, b, phi, e)
+        j = 0
+        for r in local_K:
+            kj = j%2
+            for s in range(r.shape[1]/2):
+                dfxrdxs = r.item(2*s)
+                dfxrdys = r.item(2*s+1)
+
+                K[2*indices[j/2]+kj, 2*indices[s]] += dfxrdxs
+                K[2*indices[j/2]+kj, 2*indices[s]+1] += dfxrdys
+
+            j+=1
+
 
 
 def compute_mass(M, B, map_node_id_to_index):
@@ -373,16 +395,16 @@ def start():
     # K = hMesh[0].K
 
 
-    for t in range(0, 200):
-        x = x + h*v
-        print(x)
-        v = v + h*np.matmul(invM, K).dot(x)
-        print(v)
-        # exit()
-        X_to_V(V, x)
-        plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
-        plt.plot(V[:,0], V[:,1], 'o')
-        plt.show()
+    # for t in range(0, 200):
+    #     x = x + h*v
+    #     print(x)
+    #     v = v + h*np.matmul(invM, K).dot(x)
+    #     print(v)
+    #     # exit()
+    #     X_to_V(V, x)
+    #     plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
+    #     plt.plot(V[:,0], V[:,1], 'o')
+    #     plt.show()
 
 
 
@@ -393,4 +415,4 @@ def start():
 
     # plot_sim()
 
-start()
+# start()

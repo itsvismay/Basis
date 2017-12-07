@@ -10,6 +10,7 @@ import random
 
 import plotting
 import utilities as util
+import global_variables as GV
 
 
 class Node:
@@ -125,7 +126,7 @@ class Element:
         #Reference Links
         #https://femmatlab.wordpress.com/2015/04/24/triangle-elements-stiffness-matrix/
         #http://www.civil.egmu.net/wonsiri/fe6.pdf
-        J11 = 1.1*self.n1.point[0] - self.n3.point[0]
+        J11 = self.n1.point[0] - self.n3.point[0]
         J12 =self.n1.point[1] - self.n3.point[1]
         J21 =self.n2.point[0] - self.n3.point[0]
         J22 =self.n2.point[1] - self.n3.point[1]
@@ -134,11 +135,10 @@ class Element:
                         [0, -1*J21, 0, J11, 0, J21-J11],
                         [-1*J21, J22, J11, -1*J12, J21-J11, -1*J22+J12]])*(1.0/np.linalg.det(J))
 
-        E = 1e1
-        v = 1
-        D = np.matrix([[1-v, v, 0],
-                        [ v, 1-v, 0],
-                        [ 0, 0, 0.5 -v]])*(E/((1+v)*(1-2*v)))
+
+        D = np.matrix([[1-GV.Global_Poissons, GV.Global_Poissons, 0],
+                        [ GV.Global_Poissons, 1-GV.Global_Poissons, 0],
+                        [ 0, 0, 0.5 -GV.Global_Poissons]])*(GV.Global_Youngs/((1+GV.Global_Poissons)*(1-2*GV.Global_Poissons)))
 
         t = 1 #thickness of element
         K = (np.transpose(Be)*D*Be)*t*self.get_area()
@@ -458,7 +458,6 @@ class Level:
 
         lk.create_bases()
 
-        #TODO: Uncomment this
         lk.get_mass_matrix()
         lk.get_stiffness_matrix()
 

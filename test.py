@@ -64,16 +64,17 @@ def test_slope_over_cell():
 
 def test_create_stiffness_matrix():
     dom = ((0,0), (5,5))
+    useMesh = 0
     hMesh = sim.get_hierarchical_mesh(dom)
     # print(hMesh[0].get_stiffness_matrix())
-    for n in hMesh[0].nodes:
+    for n in hMesh[useMesh].nodes:
         n.active = True
 
     print("Stiffness matrix")
     # K_1 = hMesh[0].get_stiffness_matrix();
-    print(hMesh[0].K)
+    print(hMesh[useMesh].K)
 
-    sortedflatB = sorted(list(hMesh[0].nodes), key=lambda x: x.id)
+    sortedflatB = sorted(list(hMesh[useMesh].nodes), key=lambda x: x.id )
     map_k = sim.create_active_nodes_index_map(sortedflatB)
     K = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     f = np.zeros(2*len(sortedflatB))
@@ -81,7 +82,16 @@ def test_create_stiffness_matrix():
     print("Hierarchical Stiffness")
     sim.compute_stiffness(K, sortedflatB, hMesh, map_k)
     print(map_k)
-    print(K)
+    print(K - hMesh[useMesh].K)
+    x = np.zeros(2*len(sortedflatB))
+    for b in sortedflatB:
+        x[2*map_k[b.id]] = b.point[0]
+        x[2*map_k[b.id]+1] = b.point[1]
+    print(K, x)
+    print(K.dot(x))
+    print(utils.is_pos_def(K))
+    print("Strain E")
+    print(np.dot(x, K.dot(x)))
 
 def test_create_mass_matrix():
     dom = ((0,0), (5,5))
