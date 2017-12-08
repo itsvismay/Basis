@@ -1,5 +1,5 @@
 import numpy as np
-
+import copy
 import dd as ref
 import utilities as utils
 import plotting as plot
@@ -291,10 +291,10 @@ def compute_force(f, B, map_node_id_to_index, x = None):
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
-    l2 = l1.split()
-    l3 = l2.split()
-    return [l1, l2, l3]
-    # return [l1]
+    # l2 = l1.split()
+    # l3 = l2.split()
+    # return [l1, l2, l3]
+    return [l1]
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001):
     l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
@@ -363,8 +363,8 @@ def start():
     print("Mass is spd", utils.is_pos_def(M))
     x = np.zeros(2*dupSize)
     v = np.zeros(2*dupSize)
-    v[0] = 5
-    # v[4] = -1
+    # v[0] = 5
+    v[4] = -1
 
     V = np.zeros((dupSize, 2))
 
@@ -396,19 +396,31 @@ def start():
     print(f)
     K = -1*K
 
-    p = x
-    for t in range(0, 20000):
-        p = p + h*v
-        print("p ", p)
-        v = v + h*np.matmul(invM, K).dot(p-x)
-        print("v ",v)
-        # exit()
-        X_to_V(V, p)
-        if(t%200 == 0):
-            plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
-            plt.plot(V[:,0], V[:,1], 'o')
-            plt.show()
+    p = copy.copy(x)
 
+    # for t in range(0, 20000):
+    #     v = invMdtK.dot(M.dot(v) + h*K.dot(p-x))
+    #     p = p + h*v
+    #     print("p ", p)
+    #     print("v ",v)
+    #     X_to_V(V, p)
+    #     if(t%200 == 0):
+    #         plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
+    #         plt.plot(V[:,0], V[:,1], 'o')
+    #         plt.show()
+
+    # for t in range(0, 20000):
+    #     p = p + h*v
+    #     print("p ", p)
+    #     v = v + h*np.matmul(invM, K).dot(p-x)
+    #     print("v ",v)
+    #     # exit()
+    #     X_to_V(V, p)
+    #     if(t%200 == 0):
+    #         plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
+    #         plt.plot(V[:,0], V[:,1], 'o')
+    #         plt.show()
+    #
 
 
 
@@ -418,4 +430,4 @@ def start():
 
     # plot_sim()
 
-start()
+# start()

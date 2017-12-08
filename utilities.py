@@ -18,7 +18,7 @@ def is_invertible(H):
 
 def is_pos_def(x):
     print(sorted(np.linalg.eigvals(x)))
-    return np.all(np.linalg.eigvals(x) >= 0)
+    return np.all(np.linalg.eigvals(x) >= -1e-8)
 
 def volume_of_tet(n1, n2, n3, n4):
     x = np.array([n1[0] - n4[0], n2[0] - n4[0], n3[0] - n4[0]])
