@@ -329,9 +329,6 @@ class Level:
         # print(z)
         return z
 
-    def NormalTriangleQuadrature(self, b, e):
-        #divide into subtriangles, and sum with multiplying by area
-        pass
 
     def GaussQuadrature_2d_3point(self, b, e):
         # b.basis = [[1 for i in range(5)] for j in range(5)]
@@ -366,10 +363,6 @@ class Level:
         print(np.linalg.det(F)*tot*(1.0/8)) # multiply by det(F) = new area/ old area
         print(tot)
         print(np.linalg.det(F), e.get_area())
-
-
-    def Mass_By_Quadrature(self, b1, b2, e):
-        pass
 
 
     def get_mass_matrix(self):

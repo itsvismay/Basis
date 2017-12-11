@@ -165,8 +165,8 @@ def GaussQuadrature(b1, b2, e):
     return mass
 
 def Integrate_M(M, map_node_id_to_index, b1, b2, e):
-
-    mass = AnotherQuadratureMethod(b1, b2, e)
+    density = 100
+    mass = AnotherQuadratureMethod(b1, b2, e)*density
 
     # print(map_node_id_to_index[b1.id], map_node_id_to_index[b2.id], mass)
     M[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += mass
@@ -291,8 +291,8 @@ def compute_force(f, B, map_node_id_to_index, x = None):
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
-    # l2 = l1.split()
-    # l3 = l2.split()
+    l2 = l1.split()
+    l3 = l2.split()
     # return [l1, l2, l3]
     return [l1]
 
@@ -309,6 +309,12 @@ def get_active_nodes(hMesh, dom, tolerance = 0.0001):
     # plot.plot_nodes_only(aN)
     return aN
 
+def fix_vertex(v, invM, map_node_id_to_index):
+    invM[2*v] =0
+    invM[2*v+1] =0
+
+    invM[:, 2*v] =0
+    invM[:, 2*v+1] =0
 
 def create_active_nodes_index_map(B):
     d = {}
@@ -353,6 +359,7 @@ def start():
     dupSize = len(sortedflatB)
 
     K = np.zeros((2*dupSize, 2*dupSize))
+    K = K
     f = np.zeros(2*dupSize)
     M = np.zeros((2*dupSize, 2*dupSize))
 
@@ -363,9 +370,8 @@ def start():
     print("Mass is spd", utils.is_pos_def(M))
     x = np.zeros(2*dupSize)
     v = np.zeros(2*dupSize)
-    # v[0] = 5
-    v[4] = -1
-
+    # v[2] = 5
+    v[5] = -5
     V = np.zeros((dupSize, 2))
 
 
@@ -388,39 +394,33 @@ def start():
     print(V)
 
     tri = Delaunay(V)
-    h = 1e-5
+    h = 1e-3
+
     invMdtK = np.linalg.inv(M - h*h*K)
     invM = np.linalg.inv(M)
-    print(K.dot(x))
-    compute_force(f, sortedflatB, map_node_to_ind, x)
-    print(f)
-    K = -1*K
+    fix_vertex(0, invM, map_node_to_ind)
+    fix_vertex(3, invM, map_node_to_ind)
 
+    # compute_force(f, sortedflatB, map_node_to_ind, x)
+    print(K)
+    print(M)
     p = copy.copy(x)
 
-    # for t in range(0, 20000):
-    #     v = invMdtK.dot(M.dot(v) + h*K.dot(p-x))
-    #     p = p + h*v
-    #     print("p ", p)
-    #     print("v ",v)
-    #     X_to_V(V, p)
-    #     if(t%200 == 0):
-    #         plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
-    #         plt.plot(V[:,0], V[:,1], 'o')
-    #         plt.show()
+    # exit()
 
-    # for t in range(0, 20000):
-    #     p = p + h*v
-    #     print("p ", p)
-    #     v = v + h*np.matmul(invM, K).dot(p-x)
-    #     print("v ",v)
-    #     # exit()
-    #     X_to_V(V, p)
-    #     if(t%200 == 0):
-    #         plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
-    #         plt.plot(V[:,0], V[:,1], 'o')
-    #         plt.show()
-    #
+    for t in range(0, 20000):
+        p = p + h*v
+        print("p ", p)
+        v = v + h*invM.dot(K.dot(x-p))
+        print("v ",v)
+        print("otherv", h*invM.dot(K.dot(x - p)))
+        # exit()
+        X_to_V(V, p)
+        if(t%200 == 0):
+            plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
+            plt.plot(V[:,0], V[:,1], 'o')
+            plt.show()
+
 
 
 
@@ -430,4 +430,4 @@ def start():
 
     # plot_sim()
 
-# start()
+start()

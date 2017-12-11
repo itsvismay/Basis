@@ -63,7 +63,7 @@ def test_slope_over_cell():
 
 
 def test_create_stiffness_matrix():
-    dom = ((0,0), (5,5))
+    dom = ((0,0), (2,2))
     useMesh = 0
     hMesh = sim.get_hierarchical_mesh(dom)
     # print(hMesh[0].get_stiffness_matrix())
@@ -159,7 +159,7 @@ def test_Another_Quadrature_Method():
 # test_Bs_Ba_()
 # test_basis_supports_cell()
 # test_slope_over_cell()
-# test_create_stiffness_matrix()
+test_create_stiffness_matrix()
 # test_Gaussian_Quadrature()
-test_create_mass_matrix()
+# test_create_mass_matrix()
 # test_Another_Quadrature_Method()
