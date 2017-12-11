@@ -293,8 +293,8 @@ def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
     l2 = l1.split()
     l3 = l2.split()
-    # return [l1, l2, l3]
-    return [l1]
+    return [l1, l2, l3]
+    # return [l1]
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001):
     l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
