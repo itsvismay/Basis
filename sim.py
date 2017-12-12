@@ -192,15 +192,14 @@ def get_local_B(b, e):
                     [dB_dy, dB_dx]])
 
 #(section 3.3 CHARMS)
-def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
-
+def compute_stiffness(K, B, map_node_id_to_index, x = None):
     E = set()#set of active cells
     for n in B:
         E |= n.in_elements
 
     D = np.matrix([[1-GV.Global_Poissons, GV.Global_Poissons, 0],
                     [ GV.Global_Poissons, 1-GV.Global_Poissons, 0],
-                    [ 0, 0, 0.5 -GV.Global_Poissons]])*(GV.Global_Youngs/((1+GV.Global_Poissons)*(1-2*GV.Global_Poissons)))
+                    [ 0, 0, 0.5-GV.Global_Poissons]])*(GV.Global_Youngs/((1+GV.Global_Poissons)*(1-2*GV.Global_Poissons)))
 
     t = 1 #thickness of element
 
@@ -214,7 +213,6 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
             Be = np.concatenate((Be, get_local_B(b, e)), axis=1)
 
         local_K = (np.transpose(Be)*D*Be)*t*e.get_area()
-
         indices = [map_node_id_to_index[b.id] for b in Bs_e+Ba_e]
 
         j = 0
@@ -232,7 +230,6 @@ def compute_stiffness(K, B, hMesh, map_node_id_to_index, x = None):
 
 
 def compute_mass(M, B, map_node_id_to_index):
-    print(map_node_id_to_index)
     E = set()#set of cells with active nodes
     for n in B:
         E |= n.in_elements
@@ -290,15 +287,14 @@ def get_active_nodes(hMesh, dom, tolerance = 0.0001, u_f=None):
         n2 = l1_e[1]
         n3 = l1_e[2]
         n4 = l1_e[3]
-        # u_f = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-        u_f = [[2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+        u_f = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+        # u_f = [[2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
 
-    print(hMesh)
     aN = ref.solve(hMesh, u_f, tolerance)
     return aN
 
 def fix_vertex(v, invM):
-    print("FIX", v)
+    # print("FIX", v)
     invM[2*v] =0
     invM[2*v+1] =0
 
@@ -311,7 +307,6 @@ def fix_left_end(V, invM):
     for p in V:
         if(p[0] == 0):
             fix_vertex(vert_ind, invM)
-            print(p)
         vert_ind +=1
 
 
@@ -353,9 +348,7 @@ def set_x_initially(x, B, map_node_to_ind):
 def start():
     dom = ((0,0),(5,5))
     hMesh = get_hierarchical_mesh(dom)
-    actNodes = get_active_nodes([hMesh[2]], dom)
-
-    # plot.plot_delaunay_mesh([hMesh[2].nodes])
+    actNodes = get_active_nodes(hMesh, dom)
 
     nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = remove_duplicate_nodes_map(actNodes)
 
@@ -369,7 +362,7 @@ def start():
     f = np.zeros(2*dupSize)
     M = np.zeros((2*dupSize, 2*dupSize))
 
-    compute_stiffness( K, sortedflatB, hMesh, map_node_to_ind)
+    compute_stiffness( K, sortedflatB, map_node_to_ind)
     compute_mass(M, sortedflatB, map_node_to_ind)
     compute_gravity(f, M)
     print("M - hK inverts", utils.is_invertible(M-1e-3*K))
@@ -411,18 +404,6 @@ def start():
 
     # exit()
 
-    # for t in range(0, 20000):
-    #     p = p + h*v
-    #     print("p ", p)
-    #     v = v + h*invM.dot(K.dot(x-p))
-    #     print("v ",v)
-    #     print("otherv", h*invM.dot(K.dot(x - p)))
-    #     # exit()
-    #     X_to_V(V, p)
-    #     if(t%200 == 0):
-    #         plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
-    #         plt.plot(V[:,0], V[:,1], 'o')
-    #         plt.show()
     global p
     p = copy.copy(x)
 
@@ -433,7 +414,6 @@ def start():
             p = p + h*v
             v = v + h*invM.dot(K.dot(x-p) + f)
         X_to_V(V, p)
-        # print(V)
 
     viewer = igl.viewer.Viewer()
 
