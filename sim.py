@@ -88,23 +88,6 @@ def basis_value_over_e_at_xy(b, e, x, y):
 
     return z
 
-def Integrate_K(K, map_node_id_to_index, b1, b2, e):
-    #Using the stiffness matrix formula Kij from here:
-    #https://en.wikiversity.org/wiki/Introduction_to_finite_elements/Axial_bar_finite_element_solution
-    #except for 2 dimensions dx, dy
-    A = e.get_area()
-    E = 1e1 #Youngs mod
-    # print("i, j", b1.id, b2.id)
-
-    #b1 slope over cell e
-    dB1_dx, dB1_dy = slope_over_cell(b1, e)
-    dB2_dx, dB2_dy = slope_over_cell(b2, e)
-    amountx = A*E*dB1_dx*dB2_dx
-    amounty = A*E*dB1_dy*dB2_dy
-    # print(amountx, amounty)
-
-    K[2*map_node_id_to_index[b1.id], 2*map_node_id_to_index[b2.id]] += amountx
-    K[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += amounty
 
 def AnotherQuadratureMethod(b1, b2, e):
     DEPTH = 5
@@ -288,33 +271,49 @@ def compute_force(f, B, map_node_id_to_index, x = None):
             for phi in Ba_e:
                 Integrate_f(f, map_node_id_to_index, phi, e, x)
 
+def compute_gravity(f, M):
+    for i in range(f.shape[0]):
+        if(i%2 == 1):
+            f[i] = sum(M[i])*-9.8
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
     l2 = l1.split()
     l3 = l2.split()
     return [l1, l2, l3]
-    # return [l1]
+    # return [l3]
 
-def get_active_nodes(hMesh, dom, tolerance = 0.0001):
-    l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
-    n1 = l1_e[0]
-    n2 = l1_e[1]
-    n3 = l1_e[2]
-    n4 = l1_e[3]
-    u_f = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u_f = [[x**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+def get_active_nodes(hMesh, dom, tolerance = 0.0001, u_f=None):
+    if(u_f == None):
+        l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
+        n1 = l1_e[0]
+        n2 = l1_e[1]
+        n3 = l1_e[2]
+        n4 = l1_e[3]
+        # u_f = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+        u_f = [[2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+
+    print(hMesh)
     aN = ref.solve(hMesh, u_f, tolerance)
-    # print(aN)
-    # plot.plot_nodes_only(aN)
     return aN
 
-def fix_vertex(v, invM, map_node_id_to_index):
+def fix_vertex(v, invM):
+    print("FIX", v)
     invM[2*v] =0
     invM[2*v+1] =0
 
     invM[:, 2*v] =0
     invM[:, 2*v+1] =0
+
+
+def fix_left_end(V, invM):
+    vert_ind = 0
+    for p in V:
+        if(p[0] == 0):
+            fix_vertex(vert_ind, invM)
+            print(p)
+        vert_ind +=1
+
 
 def create_active_nodes_index_map(B):
     d = {}
@@ -341,13 +340,20 @@ def remove_duplicate_nodes_map(N):
                 existing_ind = d_b_i[ d_p_b[p].id ]
                 d_b_i[b.id] = existing_ind
 
-
     return ind, d_b_i, d_p_b
+
+def set_x_initially(x, B, map_node_to_ind):
+    #SET X initially
+    for b in B:
+        x[2*map_node_to_ind[b.id]] = b.point[0]
+        x[2*map_node_to_ind[b.id]+1] = b.point[1]
+        # print(b.id, "- ", map_node_to_ind[b.id], "- ", b.point)
+
 
 def start():
     dom = ((0,0),(5,5))
     hMesh = get_hierarchical_mesh(dom)
-    actNodes = get_active_nodes(hMesh, dom)
+    actNodes = get_active_nodes([hMesh[2]], dom)
 
     # plot.plot_delaunay_mesh([hMesh[2].nodes])
 
@@ -359,75 +365,96 @@ def start():
     dupSize = len(sortedflatB)
 
     K = np.zeros((2*dupSize, 2*dupSize))
-    K = K
+    global f
     f = np.zeros(2*dupSize)
     M = np.zeros((2*dupSize, 2*dupSize))
 
     compute_stiffness( K, sortedflatB, hMesh, map_node_to_ind)
     compute_mass(M, sortedflatB, map_node_to_ind)
+    compute_gravity(f, M)
     print("M - hK inverts", utils.is_invertible(M-1e-3*K))
     # print(M)
     print("Mass is spd", utils.is_pos_def(M))
     x = np.zeros(2*dupSize)
+    global v
     v = np.zeros(2*dupSize)
     # v[2] = 5
-    v[5] = -5
+    # v[4] = 5
     V = np.zeros((dupSize, 2))
 
 
     points = []
-    #SET X initially
-    for b in sortedflatB:
-        x[2*map_node_to_ind[b.id]] = b.point[0]
-        x[2*map_node_to_ind[b.id]+1] = b.point[1]
-        # print(b.id, "- ", map_node_to_ind[b.id], "- ", b.point)
+    set_x_initially(x, sortedflatB, map_node_to_ind)
 
     def X_to_V(V, x):
         for i in range(V.shape[0]):
             V[i, 0] = x[2*i]
             V[i, 1] = x[2*i+1]
 
-    def zeroOutV(v):
-        sortedflatB
 
     X_to_V(V, x)
-    print(V)
+    # print(V)
 
+    global tri
     tri = Delaunay(V)
     h = 1e-3
 
     invMdtK = np.linalg.inv(M - h*h*K)
     invM = np.linalg.inv(M)
-    fix_vertex(0, invM, map_node_to_ind)
-    fix_vertex(3, invM, map_node_to_ind)
 
-    # compute_force(f, sortedflatB, map_node_to_ind, x)
-    print(K)
-    print(M)
-    p = copy.copy(x)
+    fix_left_end(V, invM)
+
+    #
+    # print(K)
+    # print(M)
+    print(f)
 
     # exit()
 
-    for t in range(0, 20000):
-        p = p + h*v
-        print("p ", p)
-        v = v + h*invM.dot(K.dot(x-p))
-        print("v ",v)
-        print("otherv", h*invM.dot(K.dot(x - p)))
-        # exit()
+    # for t in range(0, 20000):
+    #     p = p + h*v
+    #     print("p ", p)
+    #     v = v + h*invM.dot(K.dot(x-p))
+    #     print("v ",v)
+    #     print("otherv", h*invM.dot(K.dot(x - p)))
+    #     # exit()
+    #     X_to_V(V, p)
+    #     if(t%200 == 0):
+    #         plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
+    #         plt.plot(V[:,0], V[:,1], 'o')
+    #         plt.show()
+    global p
+    p = copy.copy(x)
+
+    def draw():
+        global p
+        global v
+        for i in range(100):
+            p = p + h*v
+            v = v + h*invM.dot(K.dot(x-p) + f)
         X_to_V(V, p)
-        if(t%200 == 0):
-            plt.triplot(V[:,0], V[:,1], tri.simplices.copy())
-            plt.plot(V[:,0], V[:,1], 'o')
-            plt.show()
+        # print(V)
 
+    viewer = igl.viewer.Viewer()
 
+    def key_down(viewer, key, modifier):
+        draw()
+        viewer.data.clear()
 
+        V1 = igl.eigen.MatrixXd(V)
+        # print(V1)
+        viewer.data.add_points(V1, igl.eigen.MatrixXd([[0,0,0]]))
+        for e in tri.simplices:
+            viewer.data.add_edges(V1.row(e[0]), V1.row(e[1]),igl.eigen.MatrixXd([[1, 1, 1]]))
+            viewer.data.add_edges(V1.row(e[1]), V1.row(e[2]),igl.eigen.MatrixXd([[1, 1, 1]]))
+            viewer.data.add_edges(V1.row(e[0]), V1.row(e[2]),igl.eigen.MatrixXd([[1, 1, 1]]))
 
-    # def plot_sim():
-    #     while True:
-    #         renderer.render(V, [2, 9])
+        return True
 
-    # plot_sim()
+    key_down(viewer, ord('5'), 0)
+    # F1 = igl.eigen.MatrixXi()
+    viewer.core.is_animating = True
+    viewer.callback_key_down = key_down
+    viewer.launch()
 
-start()
+# start()
