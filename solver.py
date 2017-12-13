@@ -1,9 +1,11 @@
 import dd as ref
 import sim as sim
 import utilities as utils
+import global_variables as GV
+
 import numpy as np
 import copy
-
+from scipy.optimize import minimize
 from scipy.spatial import Delaunay
 import sys, os
 sys.path.insert(0, os.getcwd()+"/../libigl/python/")
@@ -14,7 +16,7 @@ dom = ((0,0), (5, 5))
 
 class Mesh:
 
-    def __init__(self, x, v, f, M, K):
+    def __init__(self, x, v, f, M, K, activeElems, sortedFlatB, map_nodes):
         self.x = x
         self.p = copy.copy(x)
         self.v = v
@@ -23,9 +25,18 @@ class Mesh:
         self.invM = np.linalg.inv(M)
         self.K = K
         self.V = np.zeros((len(x)/2, 2))
+        self.activeElems = activeElems
+        self.sortedFlatB = sortedFlatB
+        self.map_nodes = map_nodes
 
         self.X_to_V(self.V, self.x)
         self.tri = Delaunay(self.V).simplices
+
+    def reset(self, Knew):
+        self.K = Knew
+        self.p = copy.copy(self.x)
+        self.v = np.zeros(len(self.p))
+        self.X_to_V(self.V, self.p)
 
     def X_to_V(self, V, x):
         for i in range(V.shape[0]):
@@ -39,7 +50,7 @@ class Mesh:
 
         self.X_to_V(self.V, self.p)
 
-    def get_grid_displacements(self):
+    def get_grid_displacement_norms(self):
         Vx = np.zeros((len(self.x)/2, 2))
         self.X_to_V(Vx, self.x)
         u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
@@ -48,35 +59,64 @@ class Mesh:
 
         return u
 
+    def get_grid_displacement(self):
+        Vx = np.zeros((len(self.x)/2, 2))
+        self.X_to_V(Vx, self.x)
+        d = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+        for i in range(len(Vx)):
+            d[int(Vx[i][0])][int(Vx[i][1])] = self.V[i]
 
+        return d
 
+def get_reference_points(meshRef, meshH):
+    disp_grid = meshRef.get_grid_displacement()
 
-def get_mesh_from_displacement(actNodes_L):
-    sortedFlatB_L = sorted([i for sublist in actNodes_L for i in sublist], key=lambda x:x.id)
-    map_L = sim.create_active_nodes_index_map(sortedFlatB_L)
-    dupSize_L = len(sortedFlatB_L)
+    u = []
 
-    K_L = np.zeros((2*dupSize_L, 2*dupSize_L))
-    M_L = np.zeros((2*dupSize_L, 2*dupSize_L))
-    f_L = np.zeros(2*dupSize_L)
-    x_L = np.zeros(2*dupSize_L)
-    v_L = np.zeros(2*dupSize_L)
+    Vh = np.zeros((len(meshH.x)/2, 2))
+    meshH.X_to_V(Vh, meshH.x)
+    for i in range(len(Vh)):
+        p = disp_grid[int(Vh[i][0])][int(Vh[i][1])]
+        u.append(p[0])
+        u.append(p[1])
 
-    sim.compute_stiffness(K_L, sortedFlatB_L, map_L)
-    sim.compute_mass(M_L, sortedFlatB_L, map_L)
+    return u
+
+def get_mesh_from_displacement(actNodes):
+    sortedFlatB = sorted([i for sublist in actNodes for i in sublist], key=lambda x:x.id)
+    map_nodes = sim.create_active_nodes_index_map(sortedFlatB)
+    dupSize = len(sortedFlatB)
+
+    M_L = np.zeros((2*dupSize, 2*dupSize))
+    K_L = np.zeros((2*dupSize, 2*dupSize))
+    f_L = np.zeros(2*dupSize)
+    x_L = np.zeros(2*dupSize)
+    v_L = np.zeros(2*dupSize)
+
+    sim.compute_mass(M_L, sortedFlatB, map_nodes)
+    sim.compute_stiffness(K_L, sortedFlatB, map_nodes)
     sim.compute_gravity(f_L, M_L)
-    sim.set_x_initially(x_L, sortedFlatB_L, map_L)
+    sim.set_x_initially(x_L, sortedFlatB, map_nodes)
 
-    mesh_L = Mesh(x_L, v_L, f_L, M_L, K_L)
+    E = set()#set of active cells
+    for n in sortedFlatB:
+        E |= n.in_elements
 
-    print("M is SPD ", utils.is_pos_def(mesh_L.M))
+    mesh = Mesh(x_L, v_L, f_L, M_L, K_L, E, sortedFlatB, map_nodes)
 
-    sim.fix_left_end(mesh_L.V, mesh_L.invM)
+    print("M is SPD ", utils.is_pos_def(mesh.M))
 
-    return mesh_L
+    sim.fix_left_end(mesh.V, mesh.invM)
 
-def display_mesh(mesh):
+    return mesh
+
+def display_mesh(mesh, Ek=None):
     viewer = igl.viewer.Viewer()
+    time = 0
+    K_k = np.zeros((2*len(mesh.sortedFlatB), 2*len(mesh.sortedFlatB)))
+    sim.compute_stiffness(K_k, mesh.sortedFlatB, mesh.map_nodes, Youngs=Ek)
+    mesh.reset(K_k)
+    print(mesh.M)
     def key_down(viewer, key, modifier):
         mesh.step()
         viewer.data.clear()
@@ -96,16 +136,41 @@ def display_mesh(mesh):
     viewer.callback_key_down = key_down
     viewer.launch()
 
+def solve(meshL, meshH):
+    print("Youngs Solve")
+    #initially youngs guess
+    E_0 = np.empty(len(meshH.activeElems))
+    E_0.fill(GV.Global_Youngs)
+    bnds = ((0, None) for i in range(len(E_0)))
+    meshL.step()
+    meshL.step()
+    uL = get_reference_points(meshL, meshH)
+    def func(E_k):
+        K_k = np.zeros((2*len(meshH.sortedFlatB), 2*len(meshH.sortedFlatB)))
+        sim.compute_stiffness(K_k, meshH.sortedFlatB, meshH.map_nodes, Youngs=E_k)
+        meshH.reset(K_k)
+        meshH.step()
+        meshH.step()
+        no = np.linalg.norm(uL - meshH.p)
+        print(no)
+        return no
+
+    res = minimize(func, E_0, method='BFGS', bounds=bnds, tol=0.1, options={"disp": True, 'gtol': 1e-1,})
+    print(res)
+    return res.x
+
 
 def set_up_solver():
 
     hMesh = sim.get_hierarchical_mesh(dom)
 
     # FOR L3 MESH
+    print("L Mesh")
     u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
     mesh_L = get_mesh_from_displacement(actNodes_L)
-    mesh_L.step()
+    display_mesh(mesh_L)
+
 
     #FOR H MESH
     print("H Mesh")
@@ -115,14 +180,16 @@ def set_up_solver():
     n3 = l1_e[2]
     n4 = l1_e[3]
     u_f_H = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u = mesh_L.get_grid_displacements()
+    # u = mesh_L.get_grid_displacement_norms()
     actNodes_H = sim.get_active_nodes(hMesh, dom, u_f=u_f_H)
     nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
-    print("duplicates ", map_duplicate_nodes_to_ind, map_points_to_bases)
+    # print("duplicates ", map_duplicate_nodes_to_ind, map_points_to_bases)
     mesh_H = get_mesh_from_displacement(actNodes_H)
 
-    display_mesh(mesh_H)
-
+    # display_mesh(mesh_H)
+    #
+    # Ek = solve(mesh_L, mesh_H)
+    # display_mesh(mesh_H, Ek)
 
 
 

@@ -192,17 +192,16 @@ def get_local_B(b, e):
                     [dB_dy, dB_dx]])
 
 #(section 3.3 CHARMS)
-def compute_stiffness(K, B, map_node_id_to_index, x = None):
+def compute_stiffness(K, B, map_node_id_to_index, x = None, Youngs=None):
     E = set()#set of active cells
     for n in B:
         E |= n.in_elements
 
-    D = np.matrix([[1-GV.Global_Poissons, GV.Global_Poissons, 0],
-                    [ GV.Global_Poissons, 1-GV.Global_Poissons, 0],
-                    [ 0, 0, 0.5-GV.Global_Poissons]])*(GV.Global_Youngs/((1+GV.Global_Poissons)*(1-2*GV.Global_Poissons)))
-
-    t = 1 #thickness of element
-
+    if(Youngs==None):
+        Youngs = np.empty(len(E))
+        Youngs.fill(GV.Global_Youngs)
+    print(Youngs)
+    elem = 0
     for e in E:
         Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)
         Ba_e = sorted(list(Ba_(e.ancestor)), key = lambda x: x.id)
@@ -211,6 +210,12 @@ def compute_stiffness(K, B, map_node_id_to_index, x = None):
         # print(Be)
         for b in Bs_e+Ba_e:
             Be = np.concatenate((Be, get_local_B(b, e)), axis=1)
+
+
+        t = 1 #thickness of element
+        D = np.matrix([[1-GV.Global_Poissons, GV.Global_Poissons, 0],
+                        [ GV.Global_Poissons, 1-GV.Global_Poissons, 0],
+                        [ 0, 0, 0.5-GV.Global_Poissons]])*(abs(Youngs[elem])/((1+GV.Global_Poissons)*(1-2*GV.Global_Poissons)))
 
         local_K = (np.transpose(Be)*D*Be)*t*e.get_area()
         indices = [map_node_id_to_index[b.id] for b in Bs_e+Ba_e]
@@ -226,6 +231,7 @@ def compute_stiffness(K, B, map_node_id_to_index, x = None):
                 K[2*indices[j/2]+kj, 2*indices[s]+1] += dfxrdys
 
             j+=1
+        elem+=1
 
 
 
