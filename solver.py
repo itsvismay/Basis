@@ -49,10 +49,16 @@ class Mesh:
             V[i, 1] = x[2*i+1]
 
     def step(self, h=1e-3):
-        for i in range(100):
+        for i in range(1):
+            print("p", self.p, len(self.p))
+            print("x", self.x, len(self.x))
+            print("v", self.v, len(self.v))
+            print("invM", self.invM.shape)
+            print("K", self.K.shape)
             self.p = self.p + h*self.v
             self.v = self.v + h*self.invM.dot(self.K.dot(self.x - self.p) + self.f)
-
+            # print("p", self.x)
+            # print("v", self.v)
         self.X_to_V(self.V, self.p)
 
     def get_grid_displacement_norms(self):
@@ -91,26 +97,26 @@ def get_mesh_from_displacement(actNodes):
     sortedFlatB = sorted([i for sublist in actNodes for i in sublist], key=lambda x:x.id)
     map_nodes_old = sim.create_active_nodes_index_map(sortedFlatB)
     nonDuplicateSize, map_nodes, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes)
-    dupSize = len(sortedFlatB)
-    print(dupSize)
-    # print("duplicates accounted for")
-    # print(map_points_to_bases)
-    # print(map_nodes)
+
+    print(nonDuplicateSize)
+    print("duplicates accounted for")
+    print(map_points_to_bases)
+    print(map_nodes)
     # print("map nodes old")
     # print(mesh_H.map_nodes)
 
-    M_L = np.zeros((2*dupSize, 2*dupSize))
-    K_L = np.zeros((2*dupSize, 2*dupSize))
-    f_L = np.zeros(2*dupSize)
-    x_L = np.zeros(2*dupSize)
-    v_L = np.zeros(2*dupSize)
+    M_L = np.zeros((2*nonDuplicateSize, 2*nonDuplicateSize))
+    K_L = np.zeros((2*nonDuplicateSize, 2*nonDuplicateSize))
+    f_L = np.zeros(2*nonDuplicateSize)
+    x_L = np.zeros(2*nonDuplicateSize)
+    v_L = np.zeros(2*nonDuplicateSize)
 
     sim.compute_mass(M_L, sortedFlatB, map_nodes)
     sim.compute_stiffness(K_L, sortedFlatB, map_nodes)
     sim.compute_gravity(f_L, M_L)
     sim.set_x_initially(x_L, sortedFlatB, map_nodes)
 
-    M_L += 1e-6*np.identity(2*dupSize)
+    M_L += 1e-6*np.identity(2*nonDuplicateSize)
     print("M is PD ", utils.is_pos_def(M_L))
 
     E = set()#set of active cells
@@ -178,10 +184,10 @@ def set_up_solver():
     hMesh = sim.get_hierarchical_mesh(dom)
 
     # FOR L3 MESH
-    print("L Mesh")
-    u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
-    mesh_L = get_mesh_from_displacement(actNodes_L)
+    # print("L Mesh")
+    # u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
+    # mesh_L = get_mesh_from_displacement(actNodes_L)
     # display_mesh(mesh_L)
 
 
@@ -193,7 +199,7 @@ def set_up_solver():
     n3 = l1_e[2]
     n4 = l1_e[3]
     # u_f_H = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    u_f_H = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u_f_H = [[x+y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
 
     actNodes_H = sim.get_active_nodes(hMesh, dom, u_f=u_f_H)
     nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
