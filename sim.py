@@ -200,7 +200,7 @@ def compute_stiffness(K, B, map_node_id_to_index, x = None, Youngs=None):
     if(Youngs==None):
         Youngs = np.empty(len(E))
         Youngs.fill(GV.Global_Youngs)
-    print(Youngs)
+
     elem = 0
     for e in E:
         Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)

@@ -457,29 +457,6 @@ class Level:
         return lk
 
 
-import scipy
-def general_eig_solve(l, A, B):
-
-    v_old = np.empty(2*len(l.nodes))
-    minNodeNum = Node.number - len(l.nodes)
-    for n in l.nodes:
-        # print(n.id,"-", n.point)
-        v_old[2*(n.id-minNodeNum)] = n.point[0]
-        v_old[2*(n.id-minNodeNum)+1] = n.point[1]
-    # print(v_old)
-    # eigvals, eigvecs = scipy.sparse.linalg.eigs(np.matrix(A),k = 4, M = np.matrix(B))
-    eigvals, eigvecs = scipy.linalg.eigh(np.matrix(A), np.matrix(B), overwrite_a = False, overwrite_b = False)
-    #eigvals, eigvecs = np.linalg.eig(np.linalg.inv(B)*A)
-
-    # print("check general eigen problem solution")
-    # print(B)
-    # print((B.dot(eigvecs)).T.dot(eigvecs))
-    # print(eigvals)
-    indx = 0
-    # plotting.plot_bases(v_old, eigvecs[19], eigvals[19], 19)
-    indx+=1
-    return eigvals, eigvecs
-
 from scipy.optimize import linprog
 from numpy.linalg import solve
 def solve(levels, u_f, toll):
@@ -493,7 +470,7 @@ def solve(levels, u_f, toll):
 
     N = np.transpose(np.matrix(bases)) # domain^2 x # of total nodes
     u = np.ravel(u_f) #domain^2 x 1
-
+    print(u)
     c = np.array([1 for k in range(N.shape[1])])
     bds = np.array([(-20, None) for k in range(N.shape[1])])
     epsilon = np.array([toll for k in range(2*N.shape[0])])

@@ -32,11 +32,16 @@ class Mesh:
         self.X_to_V(self.V, self.x)
         self.tri = Delaunay(self.V).simplices
 
-    def reset(self, Knew):
-        self.K = Knew
-        self.p = copy.copy(self.x)
-        self.v = np.zeros(len(self.p))
-        self.X_to_V(self.V, self.p)
+    def reset(self, Knew=None):
+        if(Knew is not None):
+            self.K = Knew
+            self.p = copy.copy(self.x)
+            self.v = np.zeros(len(self.p))
+            self.X_to_V(self.V, self.p)
+        else:
+            self.p = copy.copy(self.x)
+            self.v = np.zeros(len(self.p))
+            self.X_to_V(self.V, self.p)
 
     def X_to_V(self, V, x):
         for i in range(V.shape[0]):
@@ -84,8 +89,15 @@ def get_reference_points(meshRef, meshH):
 
 def get_mesh_from_displacement(actNodes):
     sortedFlatB = sorted([i for sublist in actNodes for i in sublist], key=lambda x:x.id)
-    map_nodes = sim.create_active_nodes_index_map(sortedFlatB)
+    map_nodes_old = sim.create_active_nodes_index_map(sortedFlatB)
+    nonDuplicateSize, map_nodes, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes)
     dupSize = len(sortedFlatB)
+    print(dupSize)
+    # print("duplicates accounted for")
+    # print(map_points_to_bases)
+    # print(map_nodes)
+    # print("map nodes old")
+    # print(mesh_H.map_nodes)
 
     M_L = np.zeros((2*dupSize, 2*dupSize))
     K_L = np.zeros((2*dupSize, 2*dupSize))
@@ -98,13 +110,15 @@ def get_mesh_from_displacement(actNodes):
     sim.compute_gravity(f_L, M_L)
     sim.set_x_initially(x_L, sortedFlatB, map_nodes)
 
+    M_L += 1e-6*np.identity(2*dupSize)
+    print("M is PD ", utils.is_pos_def(M_L))
+
     E = set()#set of active cells
     for n in sortedFlatB:
         E |= n.in_elements
 
     mesh = Mesh(x_L, v_L, f_L, M_L, K_L, E, sortedFlatB, map_nodes)
 
-    print("M is SPD ", utils.is_pos_def(mesh.M))
 
     sim.fix_left_end(mesh.V, mesh.invM)
 
@@ -115,8 +129,7 @@ def display_mesh(mesh, Ek=None):
     time = 0
     K_k = np.zeros((2*len(mesh.sortedFlatB), 2*len(mesh.sortedFlatB)))
     sim.compute_stiffness(K_k, mesh.sortedFlatB, mesh.map_nodes, Youngs=Ek)
-    mesh.reset(K_k)
-    print(mesh.M)
+    mesh.reset(Knew=K_k)
     def key_down(viewer, key, modifier):
         mesh.step()
         viewer.data.clear()
@@ -148,14 +161,14 @@ def solve(meshL, meshH):
     def func(E_k):
         K_k = np.zeros((2*len(meshH.sortedFlatB), 2*len(meshH.sortedFlatB)))
         sim.compute_stiffness(K_k, meshH.sortedFlatB, meshH.map_nodes, Youngs=E_k)
-        meshH.reset(K_k)
+        meshH.reset(Knew=K_k)
         meshH.step()
         meshH.step()
         no = np.linalg.norm(uL - meshH.p)
         print(no)
         return no
 
-    res = minimize(func, E_0, method='BFGS', bounds=bnds, tol=0.1, options={"disp": True, 'gtol': 1e-1,})
+    res = minimize(func, E_0, method='Nelder-Mead', bounds=bnds, tol=0.01, options={"disp": True})
     print(res)
     return res.x
 
@@ -169,7 +182,7 @@ def set_up_solver():
     u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
     mesh_L = get_mesh_from_displacement(actNodes_L)
-    display_mesh(mesh_L)
+    # display_mesh(mesh_L)
 
 
     #FOR H MESH
@@ -179,16 +192,17 @@ def set_up_solver():
     n2 = l1_e[1]
     n3 = l1_e[2]
     n4 = l1_e[3]
-    u_f_H = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u = mesh_L.get_grid_displacement_norms()
+    # u_f_H = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u_f_H = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+
     actNodes_H = sim.get_active_nodes(hMesh, dom, u_f=u_f_H)
     nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
-    # print("duplicates ", map_duplicate_nodes_to_ind, map_points_to_bases)
     mesh_H = get_mesh_from_displacement(actNodes_H)
 
-    # display_mesh(mesh_H)
+    display_mesh(mesh_H)
     #
     # Ek = solve(mesh_L, mesh_H)
+    # print("New Ek", Ek)
     # display_mesh(mesh_H, Ek)
 
 

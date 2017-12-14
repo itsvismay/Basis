@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 
 def dist(p1, p2):
     return np.linalg.norm(p1-p2)
@@ -48,3 +49,18 @@ def PointInTriangle(pt, v1, v2, v3):
 
     return ((b1 == b2) and (b2 == b3)) and \
         PointInAABB(pt, map(max, v1, v2, v3), map(min, v1, v2, v3))
+
+
+def general_eig_solve(A, B):
+    #pass in A = K matrix, and B = M matrix
+
+    # eigvals, eigvecs = scipy.sparse.linalg.eigs(np.matrix(A),k = 4, M = np.matrix(B))
+    eigvals, eigvecs = scipy.linalg.eigh(np.matrix(A), np.matrix(B), overwrite_a = False, overwrite_b = False)
+    #eigvals, eigvecs = np.linalg.eig(np.linalg.inv(B)*A)
+
+    # print("Check general eigen problem solution")
+    # print(B)
+    # print((B.dot(eigvecs)).T.dot(eigvecs))
+    # print(eigvals)
+
+    return eigvals, eigvecs
