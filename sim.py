@@ -275,9 +275,16 @@ def compute_force(f, B, map_node_id_to_index, x = None):
                 Integrate_f(f, map_node_id_to_index, phi, e, x)
 
 def compute_gravity(f, M):
+    print("Gravity Check")
+    print(f)
     for i in range(f.shape[0]):
         if(i%2 == 1):
             f[i] = sum(M[i])*-9.8
+
+    print(f)
+    invM = np.linalg.inv(M)
+    print(invM.dot(f))
+
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
@@ -304,15 +311,16 @@ def fix_vertex(v, invM):
     invM[2*v] =0
     invM[2*v+1] =0
 
-    invM[:, 2*v] =0
-    invM[:, 2*v+1] =0
+    # invM[:, 2*v] =0
+    # invM[:, 2*v+1] =0
 
 
-def fix_left_end(V, invM):
+def fix_left_end(V):
     vert_ind = 0
+    to_fix = []
     for p in V:
         if(p[0] == 0):
-            fix_vertex(vert_ind, invM)
+            to_fix.append(vert_ind)
         vert_ind +=1
 
 

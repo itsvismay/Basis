@@ -16,7 +16,7 @@ dom = ((0,0), (5, 5))
 
 class Mesh:
 
-    def __init__(self, x, v, f, M, K, activeElems, sortedFlatB, map_nodes):
+    def __init__(self, x, v, f, M, K, activeElems, sortedFlatB, map_nodes, nonDupSize):
         self.x = x
         self.p = copy.copy(x)
         self.v = v
@@ -28,6 +28,7 @@ class Mesh:
         self.activeElems = activeElems
         self.sortedFlatB = sortedFlatB
         self.map_nodes = map_nodes
+        self.nonDupSize = nonDupSize
 
         self.X_to_V(self.V, self.x)
         self.tri = Delaunay(self.V).simplices
@@ -49,16 +50,31 @@ class Mesh:
             V[i, 1] = x[2*i+1]
 
     def step(self, h=1e-3):
-        for i in range(1):
-            print("p", self.p, len(self.p))
-            print("x", self.x, len(self.x))
-            print("v", self.v, len(self.v))
-            print("invM", self.invM.shape)
-            print("K", self.K.shape)
+        invMhhK = np.linalg.inv(self.M - h*h*self.K)
+        for i in range(10):
+            # print("p", self.p, len(self.p))
+            # print("x", self.x, len(self.x))
+            # print("v", self.v, len(self.v))
+            print("invM")
+            print(self.invM)
+            # print("mass")
+            # print(self.M)
+            # print("K", self.K.shape)
+            #some implicit
+            # self.p = self.p + h*self.v
+            # self.v = invMhhK.dot(self.M.dot(self.v) + h*(self.K.dot(self.x - self.p) + self.f))
+
+            #Verlet
             self.p = self.p + h*self.v
             self.v = self.v + h*self.invM.dot(self.K.dot(self.x - self.p) + self.f)
-            # print("p", self.x)
-            # print("v", self.v)
+
+            print("p", self.p)
+            print("v", self.v)
+            print("v1", h*self.invM.dot(self.K.dot(self.x - self.p)))
+            print("v2", self.invM.dot(self.f))
+            # print("f", self.f)
+            # print("invM")
+            # print(self.invM)
         self.X_to_V(self.V, self.p)
 
     def get_grid_displacement_norms(self):
@@ -116,24 +132,32 @@ def get_mesh_from_displacement(actNodes):
     sim.compute_gravity(f_L, M_L)
     sim.set_x_initially(x_L, sortedFlatB, map_nodes)
 
-    M_L += 1e-6*np.identity(2*nonDuplicateSize)
+    M_L += 1e-2*np.identity(2*nonDuplicateSize)
     print("M is PD ", utils.is_pos_def(M_L))
 
     E = set()#set of active cells
     for n in sortedFlatB:
         E |= n.in_elements
 
-    mesh = Mesh(x_L, v_L, f_L, M_L, K_L, E, sortedFlatB, map_nodes)
+    mesh = Mesh(x_L, v_L, f_L, M_L, K_L, E, sortedFlatB, map_nodes, nonDuplicateSize)
+
+    # print("check mass inv*f")
+    # print(mesh.invM.dot(mesh.f))
+
+    # sim.fix_left_end(mesh.V)
 
 
-    sim.fix_left_end(mesh.V, mesh.invM)
-
+    # print("Check inverse")
+    # print(mesh.invM.dot(mesh.f))
+    # print(mesh.invM - mesh.invM.T)
+    #
+    # exit()
     return mesh
 
 def display_mesh(mesh, Ek=None):
     viewer = igl.viewer.Viewer()
     time = 0
-    K_k = np.zeros((2*len(mesh.sortedFlatB), 2*len(mesh.sortedFlatB)))
+    K_k = np.zeros((2*mesh.nonDupSize, 2*mesh.nonDupSize))
     sim.compute_stiffness(K_k, mesh.sortedFlatB, mesh.map_nodes, Youngs=Ek)
     mesh.reset(Knew=K_k)
     def key_down(viewer, key, modifier):
@@ -159,13 +183,13 @@ def solve(meshL, meshH):
     print("Youngs Solve")
     #initially youngs guess
     E_0 = np.empty(len(meshH.activeElems))
-    E_0.fill(GV.Global_Youngs)
+    E_0.fill(GV.Global_Youngs/10.0)
     bnds = ((0, None) for i in range(len(E_0)))
     meshL.step()
     meshL.step()
     uL = get_reference_points(meshL, meshH)
     def func(E_k):
-        K_k = np.zeros((2*len(meshH.sortedFlatB), 2*len(meshH.sortedFlatB)))
+        K_k = np.zeros((2*meshH.nonDupSize, 2*meshH.nonDupSize))
         sim.compute_stiffness(K_k, meshH.sortedFlatB, meshH.map_nodes, Youngs=E_k)
         meshH.reset(Knew=K_k)
         meshH.step()
@@ -184,7 +208,7 @@ def set_up_solver():
     hMesh = sim.get_hierarchical_mesh(dom)
 
     # FOR L3 MESH
-    # print("L Mesh")
+    print("L Mesh")
     # u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
     # mesh_L = get_mesh_from_displacement(actNodes_L)
@@ -198,8 +222,9 @@ def set_up_solver():
     n2 = l1_e[1]
     n3 = l1_e[2]
     n4 = l1_e[3]
-    # u_f_H = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    u_f_H = [[x+y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u_f_H = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # u_f_H = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # u_f_H = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
 
     actNodes_H = sim.get_active_nodes(hMesh, dom, u_f=u_f_H)
     nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
