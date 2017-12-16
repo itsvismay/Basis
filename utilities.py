@@ -17,9 +17,11 @@ def check_mode_symmetry(mode_vec, lev):
 def is_invertible(H):
     return H.shape[0]==H.shape[1] and np.linalg.matrix_rank(H) == H.shape[0]
 
-def is_pos_def(x):
+def is_sym_pos_def(x):
     # print(sorted(np.linalg.eigvals(x)))
-    return np.all(np.linalg.eigvals(x) >= -1e-8)
+    pd = np.all(np.linalg.eigvals(x) >= -1e-8)
+    sym = np.allclose(x, x.T, atol=1e-10)
+    return pd and sym
 
 def volume_of_tet(n1, n2, n3, n4):
     x = np.array([n1[0] - n4[0], n2[0] - n4[0], n3[0] - n4[0]])

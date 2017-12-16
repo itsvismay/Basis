@@ -61,8 +61,8 @@ def slope_over_cell(b, e):
     #a(x - x0) + b(y - y0) + c(z - z0) = 0,
     #a x + b y + c z = d    and
     #z = d + m x + n y
-    x_slope = -1.0*normal[0]/(normal[2])/(2*e.get_area())
-    y_slope = -1.0*normal[1]/(normal[2])/(2*e.get_area())
+    x_slope = -1.0*normal[0]/(normal[2])/(2.0*e.get_area())
+    y_slope = -1.0*normal[1]/(normal[2])/(2.0*e.get_area())
     # print("-----------", b.id, x_slope, y_slope)
     return x_slope, y_slope
 
@@ -117,37 +117,8 @@ def AnotherQuadratureMethod(b1, b2, e):
 
     return total_mass
 
-def GaussQuadrature(b1, b2, e):
-    #As defined here http://people.maths.ox.ac.uk/parsons/Specification.pdf
-    weights = [5.0/9.0, 8.0/9.0, 5.0/9.0]#, [8.0/9.0, 8.0/9.0, 8.0/9.0], [5.0/9.0, 8.0/9.0, 5.0/9.0]]
-    # weights = [1.0, 1.0, 1.0]
-    #hard coded x, y points for the standard triangle
-    x_standard = [0.11270166537, 0.5, 0.88729833462]
-    y_standard = [[0.1, 0.44364916731, 0.78729833462], \
-            [0.05635083268 , 0.25, 0.44364916731],\
-            [0.01270166537 , 0.05635083268, 0.1]]
-
-    points_on_ref_tri = []
-
-    #Ref = F*Std
-    F = e.reference_shape_matrix()*np.linalg.inv(e.standardized_shape_matrix())
-    tot = 0.0
-    for i in range(len(x_standard)):
-        for j in range(len(y_standard[i])):
-            p = np.array(F.dot(np.array([x_standard[i], y_standard[i][j]])))[0]
-            p = p + e.n1.point[:2]
-
-            m1 = basis_value_over_e_at_xy(b1, e, p[0], p[1])
-            m2 = basis_value_over_e_at_xy(b2, e, p[0], p[1])
-            if(not utils.PointInTriangle(p, e.n1.point, e.n2.point, e.n3.point)):
-                print("OH SHIT! Sim.py Integrate_M error, transformed pont not in triangle")
-                exit()
-            tot += weights[i]*weights[j]*m1*m2#*basis_value_over_e_at_xy(b1, e, p[0], p[1])*basis_value_over_e_at_xy(b2, e, p[0], p[1])
-
-    mass = abs(np.linalg.det(F))*tot*(1.0/8) # multiply by det(F) = new area/ old area
-    return mass
-
 def Integrate_M(M, map_node_id_to_index, b1, b2, e):
+    print("         Integrate ", b1.id, b2.id)
     density = 100
     mass = AnotherQuadratureMethod(b1, b2, e)*density
 
@@ -187,12 +158,14 @@ def Integrate_f(f, map_node_id_to_index, b, e, x = None):
 
 def get_local_B(b, e):
     dB_dx, dB_dy = slope_over_cell(b, e)
+    print("slopes of ", b.id, "over ", e.id)
+    print(dB_dx, dB_dy)
     return np.matrix([[dB_dx, 0],
                     [0, dB_dy],
                     [dB_dy, dB_dx]])
 
 #(section 3.3 CHARMS)
-def compute_stiffness(K, B, map_node_id_to_index, x = None, Youngs=None):
+def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
     E = set()#set of active cells
     for n in B:
         E |= n.in_elements
@@ -200,15 +173,16 @@ def compute_stiffness(K, B, map_node_id_to_index, x = None, Youngs=None):
     if(Youngs==None):
         Youngs = np.empty(len(E))
         Youngs.fill(GV.Global_Youngs)
-
     elem = 0
     for e in E:
+        print("Element ", e.id)
         Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)
         Ba_e = sorted(list(Ba_(e.ancestor)), key = lambda x: x.id)
 
         Be = np.matrix([]).reshape(3, 0)
         # print(Be)
         for b in Bs_e+Ba_e:
+            print("     Node ", b.id)
             Be = np.concatenate((Be, get_local_B(b, e)), axis=1)
 
 
@@ -218,7 +192,15 @@ def compute_stiffness(K, B, map_node_id_to_index, x = None, Youngs=None):
                         [ 0, 0, 0.5-GV.Global_Poissons]])*(abs(Youngs[elem])/((1+GV.Global_Poissons)*(1-2*GV.Global_Poissons)))
 
         local_K = (np.transpose(Be)*D*Be)*t*e.get_area()
-        indices = [map_node_id_to_index[b.id] for b in Bs_e+Ba_e]
+        print("Be")
+        print(Be)
+        print("local K")
+        print(local_K)
+        indices = []
+        print(map_node_id_to_index)
+        for b in Bs_e+Ba_e:
+            print(b.id)
+            indices.append(map_node_id_to_index[b.id])
 
         j = 0
         for r in local_K:
@@ -233,6 +215,8 @@ def compute_stiffness(K, B, map_node_id_to_index, x = None, Youngs=None):
             j+=1
         elem+=1
 
+    print("STIFFNESS")
+    print(K)
 
 
 def compute_mass(M, B, map_node_id_to_index):
@@ -241,9 +225,11 @@ def compute_mass(M, B, map_node_id_to_index):
         E |= n.in_elements
 
     for e in E:
+        print("Element ", e.id)
         Bs_e = Bs_(e)
         Ba_e = Ba_(e.ancestor)
         for b in Bs_e:
+            # print("     Node ", b.id)
             Integrate_M(M, map_node_id_to_index, b, b, e)
 
             Bs_eNotb = Bs_e - set([b])
@@ -251,7 +237,8 @@ def compute_mass(M, B, map_node_id_to_index):
                 Integrate_M(M, map_node_id_to_index, b, phi, e)
 
             for phi in Ba_e:
-                m1 = Integrate_M(M, map_node_id_to_index, b, phi, e)
+                Integrate_M(M, map_node_id_to_index, b, phi, e)
+                Integrate_M(M, map_node_id_to_index, phi, b, e)
 
 
 def compute_force(f, B, map_node_id_to_index, x = None):
@@ -275,16 +262,9 @@ def compute_force(f, B, map_node_id_to_index, x = None):
                 Integrate_f(f, map_node_id_to_index, phi, e, x)
 
 def compute_gravity(f, M):
-    print("Gravity Check")
-    print(f)
     for i in range(f.shape[0]):
         if(i%2 == 1):
             f[i] = sum(M[i])*-9.8
-
-    print(f)
-    invM = np.linalg.inv(M)
-    print(invM.dot(f))
-
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
@@ -311,8 +291,8 @@ def fix_vertex(v, invM):
     invM[2*v] =0
     invM[2*v+1] =0
 
-    # invM[:, 2*v] =0
-    # invM[:, 2*v+1] =0
+    invM[:, 2*v] =0
+    invM[:, 2*v+1] =0
 
 
 def fix_left_end(V):
@@ -322,6 +302,15 @@ def fix_left_end(V):
         if(p[0] == 0):
             to_fix.append(vert_ind)
         vert_ind +=1
+
+    print("Fix Left End")
+    print(to_fix)
+    P1 = np.delete(np.eye(V.shape[0]), to_fix, axis =1)
+    P = np.kron(P1, np.eye(2))
+    # print(np.matmul(P, P.T))
+
+    return P
+
 
 
 def create_active_nodes_index_map(B):
@@ -381,7 +370,7 @@ def start():
     compute_gravity(f, M)
     print("M - hK inverts", utils.is_invertible(M-1e-3*K))
     # print(M)
-    print("Mass is spd", utils.is_pos_def(M))
+    print("Mass is spd", utils.is_sym_pos_def(M))
     x = np.zeros(2*dupSize)
     global v
     v = np.zeros(2*dupSize)

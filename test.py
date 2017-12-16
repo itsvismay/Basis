@@ -63,7 +63,7 @@ def test_slope_over_cell():
 
 
 def test_create_stiffness_matrix():
-    dom = ((0,0), (2,2))
+    dom = ((0,0), (5,5))
     useMesh = 0
     hMesh = sim.get_hierarchical_mesh(dom)
     # print(hMesh[0].get_stiffness_matrix())
@@ -76,11 +76,13 @@ def test_create_stiffness_matrix():
 
     sortedflatB = sorted(list(hMesh[useMesh].nodes), key=lambda x: x.id )
     map_k = sim.create_active_nodes_index_map(sortedflatB)
+    print("MAP")
+    print(map_k)
     K = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     f = np.zeros(2*len(sortedflatB))
     M = np.zeros((2*len(sortedflatB), 2*len(sortedflatB)))
     print("Hierarchical Stiffness")
-    sim.compute_stiffness(K, sortedflatB, hMesh, map_k)
+    sim.compute_stiffness(K, sortedflatB, map_k)
     print(map_k)
     print(K - hMesh[useMesh].K)
     x = np.zeros(2*len(sortedflatB))
@@ -89,7 +91,7 @@ def test_create_stiffness_matrix():
         x[2*map_k[b.id]+1] = b.point[1]
     print(K, x)
     print(K.dot(x))
-    print(utils.is_pos_def(K))
+    print(utils.is_sym_pos_def(K))
     print("Strain E")
     print(np.dot(x, K.dot(x)))
 
@@ -107,10 +109,10 @@ def test_create_mass_matrix():
     sim.compute_mass(M, sortedflatB, map_k)
 
     print(hMesh[0].get_mass_matrix())
-    print("Lumped Mass SPD",utils.is_pos_def(hMesh[0].get_mass_matrix()))
+    print("Lumped Mass SPD",utils.is_sym_pos_def(hMesh[0].get_mass_matrix()))
     print("")
     print(M)
-    print("Sim Mass SPD", utils.is_pos_def(M))
+    print("Sim Mass SPD", utils.is_sym_pos_def(M))
     # for r in M:
     #     print(sum(r))
 

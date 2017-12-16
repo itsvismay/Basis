@@ -10,6 +10,8 @@ from scipy.spatial import Delaunay
 import sys, os
 sys.path.insert(0, os.getcwd()+"/../libigl/python/")
 import pyigl as igl
+np.set_printoptions(threshold="nan", linewidth=190, precision=8, formatter={'all': lambda x:'{:2.2f}'.format(x)})
+
 
 
 dom = ((0,0), (5, 5))
@@ -22,7 +24,11 @@ class Mesh:
         self.v = v
         self.f = f
         self.M = M
+        # print("Mass Matrix")
+        # print(self.M)
         self.invM = np.linalg.inv(M)
+        # print("INV MASS")
+        # print(self.invM)
         self.K = K
         self.V = np.zeros((len(x)/2, 2))
         self.activeElems = activeElems
@@ -51,31 +57,62 @@ class Mesh:
 
     def step(self, h=1e-3):
         invMhhK = np.linalg.inv(self.M - h*h*self.K)
-        for i in range(10):
-            # print("p", self.p, len(self.p))
-            # print("x", self.x, len(self.x))
-            # print("v", self.v, len(self.v))
-            print("invM")
-            print(self.invM)
-            # print("mass")
-            # print(self.M)
-            # print("K", self.K.shape)
-            #some implicit
-            # self.p = self.p + h*self.v
-            # self.v = invMhhK.dot(self.M.dot(self.v) + h*(self.K.dot(self.x - self.p) + self.f))
+        P = sim.fix_left_end(self.V)
+        # print("inv m")
+        # print(self.M)
+        # print(np.matmul(np.matmul(P.T, self.invM), P))
+        # print(P.dot(P.T.dot(self.x)))
+        # print(self.x)
+        # exit()
+        print("Debugging stiffness")
 
-            #Verlet
-            self.p = self.p + h*self.v
-            self.v = self.v + h*self.invM.dot(self.K.dot(self.x - self.p) + self.f)
+        for i in range (100):
+            self.p = self.p + h*np.matmul(P, P.T).dot(self.v)
+            forces = self.f + self.K.dot(self.x - self.p)
+            self.v = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
 
-            print("p", self.p)
-            print("v", self.v)
-            print("v1", h*self.invM.dot(self.K.dot(self.x - self.p)))
-            print("v2", self.invM.dot(self.f))
-            # print("f", self.f)
-            # print("invM")
-            # print(self.invM)
+
+            # print("p", self.p)
+            # print("x-p", self.x - self.p)
+            # print("v", self.v)
+            # print("K",self.K)
+            # print("v2", h*self.invM.dot(self.f))
+            # print("")
+
         self.X_to_V(self.V, self.p)
+
+
+
+        # exit()
+        # diffxp = np.array([0,0.5, 0,0.5, 0,0.5, 0,0.5, 0,0.5, 0,0.5])
+        # print(self.K.dot(diffxp))
+
+        # for i in range(10):
+        #     # print("p", self.p, len(self.p))
+        #     # print("x", self.x, len(self.x))
+        #     # print("v", self.v, len(self.v))
+        #     # print("mass")
+        #     # print(self.M)
+        #     # print("K", self.K.shape)
+        #     #some implicit
+        #     # self.p = self.p + h*self.v
+        #     # self.v = invMhhK.dot(self.M.dot(self.v) + h*(self.K.dot(self.x - self.p) + self.f))
+        #
+        #     #Verlet
+        #     self.p = self.p + h*self.v
+        #     forces = self.f + self.K.dot(self.x - self.p)
+        #     self.v = self.v + h*self.invM.dot(forces)
+        #
+        #     print("p", self.p)
+        #     print("x-p", self.x - self.p)
+        #     print("v", self.v)
+        #     print("v1", h*self.invM.dot(self.K.dot(self.x - self.p)))
+        #     print("v2", h*self.invM.dot(self.f))
+        #     print()
+        #     # print("f", self.f)
+        #     # print("invM")
+        #     # print(self.invM)
+        # self.X_to_V(self.V, self.p)
 
     def get_grid_displacement_norms(self):
         Vx = np.zeros((len(self.x)/2, 2))
@@ -121,6 +158,8 @@ def get_mesh_from_displacement(actNodes):
     # print("map nodes old")
     # print(mesh_H.map_nodes)
 
+
+
     M_L = np.zeros((2*nonDuplicateSize, 2*nonDuplicateSize))
     K_L = np.zeros((2*nonDuplicateSize, 2*nonDuplicateSize))
     f_L = np.zeros(2*nonDuplicateSize)
@@ -132,9 +171,10 @@ def get_mesh_from_displacement(actNodes):
     sim.compute_gravity(f_L, M_L)
     sim.set_x_initially(x_L, sortedFlatB, map_nodes)
 
-    M_L += 1e-2*np.identity(2*nonDuplicateSize)
-    print("M is PD ", utils.is_pos_def(M_L))
+    M_L += 1e-1*np.identity(2*nonDuplicateSize)
+    print("M is SPD ", utils.is_sym_pos_def(M_L))
 
+    # exit()
     E = set()#set of active cells
     for n in sortedFlatB:
         E |= n.in_elements
@@ -144,22 +184,20 @@ def get_mesh_from_displacement(actNodes):
     # print("check mass inv*f")
     # print(mesh.invM.dot(mesh.f))
 
-    # sim.fix_left_end(mesh.V)
 
 
     # print("Check inverse")
     # print(mesh.invM.dot(mesh.f))
     # print(mesh.invM - mesh.invM.T)
     #
-    # exit()
     return mesh
 
 def display_mesh(mesh, Ek=None):
     viewer = igl.viewer.Viewer()
     time = 0
-    K_k = np.zeros((2*mesh.nonDupSize, 2*mesh.nonDupSize))
-    sim.compute_stiffness(K_k, mesh.sortedFlatB, mesh.map_nodes, Youngs=Ek)
-    mesh.reset(Knew=K_k)
+    # K_k = np.zeros((2*mesh.nonDupSize, 2*mesh.nonDupSize))
+    # sim.compute_stiffness(K_k, mesh.sortedFlatB, mesh.map_nodes, Youngs=Ek)
+    # mesh.reset(Knew=K_k)
     def key_down(viewer, key, modifier):
         mesh.step()
         viewer.data.clear()
@@ -210,7 +248,7 @@ def set_up_solver():
     # FOR L3 MESH
     print("L Mesh")
     # u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
+    # actNodes_L = sim.get_active_nodes([hMesh[0]], dom, u_f=u_f_L)
     # mesh_L = get_mesh_from_displacement(actNodes_L)
     # display_mesh(mesh_L)
 
@@ -229,9 +267,9 @@ def set_up_solver():
     actNodes_H = sim.get_active_nodes(hMesh, dom, u_f=u_f_H)
     nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
     mesh_H = get_mesh_from_displacement(actNodes_H)
-
     display_mesh(mesh_H)
-    #
+
+
     # Ek = solve(mesh_L, mesh_H)
     # print("New Ek", Ek)
     # display_mesh(mesh_H, Ek)

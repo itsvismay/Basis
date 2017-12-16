@@ -11,4 +11,9 @@ Todo list:
     - Free fall sim
     - Fixed points sim
 
-4. Run the full Youngs solver 
+4. Run the full Youngs solver
+    - Run on test, make sure it works
+    - Run on a modal basis
+
+5. Time warp
+    - Talk to Dave
