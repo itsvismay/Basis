@@ -118,7 +118,7 @@ def AnotherQuadratureMethod(b1, b2, e):
     return total_mass
 
 def Integrate_M(M, map_node_id_to_index, b1, b2, e):
-    print("         Integrate ", b1.id, b2.id)
+    # print("         Integrate ", b1.id, b2.id)
     density = 100
     mass = AnotherQuadratureMethod(b1, b2, e)*density
 
@@ -158,8 +158,8 @@ def Integrate_f(f, map_node_id_to_index, b, e, x = None):
 
 def get_local_B(b, e):
     dB_dx, dB_dy = slope_over_cell(b, e)
-    print("slopes of ", b.id, "over ", e.id)
-    print(dB_dx, dB_dy)
+    # print("slopes of ", b.id, "over ", e.id)
+    # print(dB_dx, dB_dy)
     return np.matrix([[dB_dx, 0],
                     [0, dB_dy],
                     [dB_dy, dB_dx]])
@@ -175,14 +175,14 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
         Youngs.fill(GV.Global_Youngs)
     elem = 0
     for e in E:
-        print("Element ", e.id)
+        # print("Element ", e.id)
         Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)
         Ba_e = sorted(list(Ba_(e.ancestor)), key = lambda x: x.id)
 
         Be = np.matrix([]).reshape(3, 0)
         # print(Be)
         for b in Bs_e+Ba_e:
-            print("     Node ", b.id)
+            # print("     Node ", b.id)
             Be = np.concatenate((Be, get_local_B(b, e)), axis=1)
 
 
@@ -192,14 +192,14 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
                         [ 0, 0, 0.5-GV.Global_Poissons]])*(abs(Youngs[elem])/((1+GV.Global_Poissons)*(1-2*GV.Global_Poissons)))
 
         local_K = (np.transpose(Be)*D*Be)*t*e.get_area()
-        print("Be")
-        print(Be)
-        print("local K")
-        print(local_K)
+        # print("Be")
+        # print(Be)
+        # print("local K")
+        # print(local_K)
         indices = []
-        print(map_node_id_to_index)
+        # print(map_node_id_to_index)
         for b in Bs_e+Ba_e:
-            print(b.id)
+            # print(b.id)
             indices.append(map_node_id_to_index[b.id])
 
         j = 0
@@ -214,9 +214,9 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
 
             j+=1
         elem+=1
-
-    print("STIFFNESS")
-    print(K)
+    
+    # print("STIFFNESS")
+    # print(K)
 
 
 def compute_mass(M, B, map_node_id_to_index):
@@ -225,7 +225,7 @@ def compute_mass(M, B, map_node_id_to_index):
         E |= n.in_elements
 
     for e in E:
-        print("Element ", e.id)
+        # print("Element ", e.id)
         Bs_e = Bs_(e)
         Ba_e = Ba_(e.ancestor)
         for b in Bs_e:
@@ -303,8 +303,7 @@ def fix_left_end(V):
             to_fix.append(vert_ind)
         vert_ind +=1
 
-    print("Fix Left End")
-    print(to_fix)
+    # to_fix = []
     P1 = np.delete(np.eye(V.shape[0]), to_fix, axis =1)
     P = np.kron(P1, np.eye(2))
     # print(np.matmul(P, P.T))
