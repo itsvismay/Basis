@@ -9,6 +9,7 @@ Todo list:
 
 1. Make sure the physics is right
      - Implicit time integrator
+     - Embedded meshes (done)
      - That weird optimization thing
      - Density seems off. hMesh[0] wiggles more than hMesh[2]
 
