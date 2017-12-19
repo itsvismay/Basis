@@ -214,7 +214,7 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
 
             j+=1
         elem+=1
-    
+
     # print("STIFFNESS")
     # print(K)
 
