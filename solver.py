@@ -7,6 +7,7 @@ import numpy as np
 import copy
 from scipy.optimize import minimize
 from scipy.spatial import Delaunay
+import scipy
 import sys, os
 sys.path.insert(0, os.getcwd()+"/../libigl/python/")
 import pyigl as igl
@@ -24,6 +25,7 @@ class Mesh:
         self.v = v
         self.f = f
         self.M = M
+        self.W = sim.get_weighting_matrix(nonDupSize, sortedFlatB, map_nodes)
         self.invM = np.linalg.inv(M)
         self.K = K
         self.V = np.zeros((len(x)/2, 2))
@@ -74,12 +76,48 @@ class Mesh:
             self.p = self.p + h*np.matmul(P, P.T).dot(self.v)
             forces = self.f + self.K.dot(self.x - self.p)
             self.v = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
-            # self.v = invMhhK.dot(self.M.dot(self.v) + h*self.K.dot(forces))
-            # self.p = self.p + h*self.v
-            # print("p ", self.p)
+            # newv = np.copy(self.v)
+            # func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
+            # def constr(x):
+            #     return x - (self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))))
+            # cons = ({'type': 'eq', 'fun': constr })
+            #
+
+            # res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
+            # print(res)
+            # self.v = res.x
 
         self.X_to_V(self.V, self.p)
 
+    def NMstep(self, h=1e-2):
+        P = sim.fix_left_end(self.V)
+
+        for its in range(10):
+            p_g = np.copy(self.p)
+            NewtonMax = 100
+            for i in range(NewtonMax):
+                forces = self.f + self.K.dot(self.x - p_g)
+                g_block = p_g - self.p - h*(self.v + h*self.invM.dot(forces))
+                grad_g_block = np.identity(2*self.nonDupSize) - h*h*np.matmul(self.invM, self.K)
+                # g_block = P.T.dot(p_g) - P.T.dot(self.p) - h*P.T.dot(self.v) - h*h*np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))
+                # grad_g_block =  np.matmul(np.matmul(P.T, np.identity(2*(self.nonDupSize))), P) - h*h*np.matmul(np.matmul(np.matmul(P.T, self.invM), P), np.matmul(np.matmul(P.T, self.K), P))
+                Q,R = np.linalg.qr(grad_g_block)
+                Qg = Q.T.dot(-1*g_block)
+                dp = np.linalg.solve(R, Qg)
+                p_g += dp
+
+                print("gblock norm")
+                print(np.linalg.norm(g_block))
+                print("")
+                if np.linalg.norm(g_block)/len(g_block) < 1e-4:
+                    print("solved in ", i)
+                    break
+                if i == 10:
+                    print("Error: not converging")
+                    exit()
+            self.v = (p_g - self.p)/h
+            self.p = np.copy(p_g)
+        self.X_to_V(self.V, self.p)
 
 
     def get_grid_displacement_norms(self):
@@ -182,12 +220,14 @@ def display_mesh(mesh, Ek=None):
 
         viewer.data.clear()
         V1 = igl.eigen.MatrixXd(Emesh)
+        F1 = igl.eigen.MatrixXi(mesh.EmbeddedTri)
+        viewer.data.set_mesh(V1, F1)
         # print(V1)
-        viewer.data.add_points(V1, igl.eigen.MatrixXd([[0,1,0]]))
-        for e in mesh.EmbeddedTri:
-            viewer.data.add_edges(V1.row(e[0]), V1.row(e[1]),igl.eigen.MatrixXd([[1, 1, 1]]))
-            viewer.data.add_edges(V1.row(e[1]), V1.row(e[2]),igl.eigen.MatrixXd([[1, 1, 1]]))
-            viewer.data.add_edges(V1.row(e[0]), V1.row(e[2]),igl.eigen.MatrixXd([[1, 1, 1]]))
+        # viewer.data.add_points(V1, igl.eigen.MatrixXd([[0,1,0]]))
+        # for e in mesh.EmbeddedTri:
+        #     viewer.data.add_edges(V1.row(e[0]), V1.row(e[1]),igl.eigen.MatrixXd([[1, 1, 1]]))
+        #     viewer.data.add_edges(V1.row(e[1]), V1.row(e[2]),igl.eigen.MatrixXd([[1, 1, 1]]))
+        #     viewer.data.add_edges(V1.row(e[0]), V1.row(e[2]),igl.eigen.MatrixXd([[1, 1, 1]]))
 
         return True
 
@@ -200,7 +240,7 @@ def solve(meshL, meshH):
     print("Youngs Solve")
     #initially youngs guess
     E_0 = np.empty(len(meshH.activeElems))
-    E_0.fill(GV.Global_Youngs/10.0)
+    E_0.fill(GV.Global_Youngs/1.0)
     bnds = ((0, None) for i in range(len(E_0)))
     meshL.step()
     meshL.step()
@@ -215,7 +255,7 @@ def solve(meshL, meshH):
         print(no)
         return no
 
-    res = minimize(func, E_0, method='Nelder-Mead', bounds=bnds, tol=0.01, options={"disp": True})
+    res = minimize(func, E_0, method='Nelder-Mead', bounds=bnds, options={"disp": True})
     print(res)
     return res.x
 
@@ -226,9 +266,10 @@ def set_up_solver():
 
     # FOR L3 MESH
     print("L Mesh")
-    # u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
-    # mesh_L = get_mesh_from_displacement(actNodes_L, [n for n in hmesh[2].nodes])
+    u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
+    mesh_L = get_mesh_from_displacement(actNodes_L, [n for n in hMesh[2].nodes])
+
     # display_mesh(mesh_L)
 
 
@@ -239,8 +280,8 @@ def set_up_solver():
     n2 = l1_e[1]
     n3 = l1_e[2]
     n4 = l1_e[3]
-    # u_f_H = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    u_f_H = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u_f_H = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # u_f_H = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u_f_H = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
 
     actNodes_H = sim.get_active_nodes(hMesh, dom, u_f=u_f_H)

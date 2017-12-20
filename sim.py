@@ -339,6 +339,15 @@ def remove_duplicate_nodes_map(N):
 
     return ind, d_b_i, d_p_b
 
+def get_weighting_matrix(nonDupSize, B, map_node_to_ind):
+    W = np.identity(2*nonDupSize)
+
+    for b in B:
+        W[2*map_node_to_ind[b.id], 2*map_node_to_ind[b.id]] *= 10*b.level
+        W[2*map_node_to_ind[b.id]+1, 2*map_node_to_ind[b.id]+1] *= 10*b.level
+    print(len(B))
+    print(W.shape)
+    return W
 def set_x_initially(x, B, map_node_to_ind):
     #SET X initially
     for b in B:
