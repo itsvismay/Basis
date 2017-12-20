@@ -470,7 +470,6 @@ def solve(levels, u_f, toll):
 
     N = np.transpose(np.matrix(bases)) # domain^2 x # of total nodes
     u = np.ravel(u_f) #domain^2 x 1
-    print(u)
     c = np.array([1 for k in range(N.shape[1])])
     bds = np.array([(-20, None) for k in range(N.shape[1])])
     epsilon = np.array([toll for k in range(2*N.shape[0])])

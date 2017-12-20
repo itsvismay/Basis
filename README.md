@@ -10,7 +10,7 @@ Todo list:
 1. Make sure the physics is right
      - Implicit time integrator
      - Embedded meshes (done)
-     - That weird optimization thing
+     - That weird optimization thing (done)
      - Density seems off. hMesh[0] wiggles more than hMesh[2]
 
 3. Test everything for linear modes

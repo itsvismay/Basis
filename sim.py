@@ -263,7 +263,7 @@ def compute_force(f, B, map_node_id_to_index, x = None):
 
 def compute_gravity(f, M):
     for i in range(f.shape[0]):
-        if(i%2 == 1):
+        if(i%2 == 0):
             f[i] = sum(M[i])*-9.8
 
 def get_hierarchical_mesh(dom):
@@ -339,14 +339,22 @@ def remove_duplicate_nodes_map(N):
 
     return ind, d_b_i, d_p_b
 
+def set_desired_config(u_f, B, eigv, map_nodes):
+    for b in B:
+        x_d = eigv[map_nodes[b.id]]
+        y_d = eigv[map_nodes[b.id]+1]
+        #use += below so user can set multiple desired configs
+        u_f[int(b.point[0])][int(b.point[1])] += np.linalg.norm(np.array([x_d, y_d]))
+
+
+
 def get_weighting_matrix(nonDupSize, B, map_node_to_ind):
     W = np.identity(2*nonDupSize)
 
     for b in B:
         W[2*map_node_to_ind[b.id], 2*map_node_to_ind[b.id]] *= 10*b.level
         W[2*map_node_to_ind[b.id]+1, 2*map_node_to_ind[b.id]+1] *= 10*b.level
-    print(len(B))
-    print(W.shape)
+
     return W
 def set_x_initially(x, B, map_node_to_ind):
     #SET X initially
@@ -364,17 +372,17 @@ def start():
     nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = remove_duplicate_nodes_map(actNodes)
 
     flatB = [i for sublist in actNodes for i in sublist]
-    sortedflatB = sorted(flatB, key=lambda x:x.id)
-    map_node_to_ind = create_active_nodes_index_map(sortedflatB)
-    dupSize = len(sortedflatB)
+    sortedFlatB = sorted(flatB, key=lambda x:x.id)
+    map_node_to_ind = create_active_nodes_index_map(sortedFlatB)
+    dupSize = len(sortedFlatB)
 
     K = np.zeros((2*dupSize, 2*dupSize))
     global f
     f = np.zeros(2*dupSize)
     M = np.zeros((2*dupSize, 2*dupSize))
 
-    compute_stiffness( K, sortedflatB, map_node_to_ind)
-    compute_mass(M, sortedflatB, map_node_to_ind)
+    compute_stiffness( K, sortedFlatB, map_node_to_ind)
+    compute_mass(M, sortedFlatB, map_node_to_ind)
     compute_gravity(f, M)
     print("M - hK inverts", utils.is_invertible(M-1e-3*K))
     # print(M)
@@ -388,7 +396,7 @@ def start():
 
 
     points = []
-    set_x_initially(x, sortedflatB, map_node_to_ind)
+    set_x_initially(x, sortedFlatB, map_node_to_ind)
 
     def X_to_V(V, x):
         for i in range(V.shape[0]):
