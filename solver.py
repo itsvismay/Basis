@@ -36,7 +36,7 @@ class Mesh:
 
         self.EmbeddingNodes = EmbeddingNodes
         self.EmbeddedMesh, self.EmbeddedTri = self.create_embedded_mesh()
-
+        self.Nc = self.create_Nc_matrix()
 
         self.X_to_V(self.V, self.x)
 
@@ -75,17 +75,15 @@ class Mesh:
         for i in range (100):
             self.p = self.p + h*np.matmul(P, P.T).dot(self.v)
             forces = self.f + self.K.dot(self.x - self.p)
-            self.v = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
-            # newv = np.copy(self.v)
-            # func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
-            # def constr(x):
-            #     return x - (self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))))
-            # cons = ({'type': 'eq', 'fun': constr })
-            #
+            # self.v = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
+            newv = np.copy(self.v)
+            func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
+            def constr(x):
+                return x - (self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))))
+            cons = ({'type': 'eq', 'fun': constr })
 
-            # res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
-            # print(res)
-            # self.v = res.x
+            res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
+            self.v = res.x
 
         self.X_to_V(self.V, self.p)
 
@@ -138,8 +136,24 @@ class Mesh:
 
         return d
 
+    def create_Nc_matrix(self):
+        Nc = np.zeros((2*len(self.EmbeddingNodes), 2*self.nonDupSize)) # embedded x hierarch
+        print("NC shape")
+        print(Nc.shape)
+        i = 0
+        for a in sorted(self.EmbeddingNodes, key=lambda x:x.id):
+            n_b_at_a = 0
+            for b in self.sortedFlatB:
+                n_b_at_a = b.basis[a.point[0]][a.point[1]]
+                Nc[2*i, 2*self.map_nodes[b.id]] += n_b_at_a
+                Nc[2*i+1, 2*self.map_nodes[b.id]+1] += n_b_at_a
+            i+=1
+
+        return Nc
+
     def get_embedded_mesh(self):
         update_disp = np.zeros((len(self.EmbeddingNodes), 2))
+        update_disp2 = np.zeros((len(self.EmbeddingNodes), 2))
         i = 0
         for a in sorted(self.EmbeddingNodes, key=lambda x:x.id):
             u_a_x = 0
@@ -156,6 +170,16 @@ class Mesh:
             update_disp[i,1] = u_a_y
             i+=1
 
+        print("Update Disp")
+        print(update_disp)
+        print("")
+        print("other update")
+        self.X_to_V(update_disp2, self.Nc.dot(self.p - self.x))
+        print(update_disp2)
+        print("")
+        print("Nc")
+        print(self.Nc)
+        # exit()
         return self.EmbeddedMesh + update_disp
 
 def get_reference_points(meshRef, meshH):
@@ -233,6 +257,7 @@ def solve(meshL, meshH):
     E_0.fill(GV.Global_Youngs*1.0)
     bnds = ((0, None) for i in range(len(E_0)))
     meshL.step()
+
     meshL.step()
     def func(E_k):
         K_k = np.zeros((2*meshH.nonDupSize, 2*meshH.nonDupSize))
@@ -270,19 +295,38 @@ def set_up_solver():
     n2 = l1_e[1]
     n3 = l1_e[2]
     n4 = l1_e[3]
-    u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u_f_H = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u_f_H = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u_f_H = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
 
     # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,9], mesh_L.map_nodes)
-    sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,5], mesh_L.map_nodes)
+    # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,5], mesh_L.map_nodes)
     actNodes_H = sim.get_active_nodes(hMesh, dom, tolerance=1e-3, u_f=u)
     nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
     mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[2].nodes])
     E_0 = np.empty(len(mesh_H.activeElems))
     E_0.fill(GV.Global_Youngs*1.0)
-    display_mesh(mesh_H, E_0)
+    M_f = np.matmul(np.matmul(mesh_H.Nc.T, mesh_L.M), mesh_H.Nc)
+    M_c = mesh_H.M
+    arb_v = np.zeros(2*mesh_H.nonDupSize)
+
+    print("coarse mass lumped")
+    print(M_c)
+    for i in range(M_c.shape[0]):
+        arb_v[i] = 1
+        print(sum(M_c[i]))
+
+    print("coarse momentum", np.dot(arb_v, M_c.dot(arb_v)))
+    print("")
+    print("fine mass lumped")
+    print(M_f)
+    for i in range(M_f.shape[0]):
+        print(sum(M_f[i]))
+    print("fine momentum", np.dot(arb_v, M_f.dot(arb_v)))
+
+
+    # display_mesh(mesh_H, E_0)
 
 
     # Ek = solve(mesh_L, mesh_H)
