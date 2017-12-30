@@ -87,13 +87,40 @@ class Mesh:
 
         self.X_to_V(self.V, self.p)
 
+    def NM_static(self):
+        P = sim.fix_left_end(self.V)
+        p_g = np.copy(self.p)
+        NewtonMax = 100
+        for i in range(NewtonMax):
+            forces = self.f + self.K.dot(self.x - p_g)
+
+            g_block = P.T.dot(forces)
+            grad_g_block = np.matmul(np.matmul(P.T, self.K), P)
+
+            Q,R = np.linalg.qr(grad_g_block)
+            Qg = Q.T.dot(g_block)
+            dp = -1*np.linalg.solve(R, Qg)
+            p_g += P.dot(dp)
+
+            print("gblock norm")
+            print(np.linalg.norm(g_block))
+            print("")
+            if (np.linalg.norm(g_block)/len(g_block)) < 1e-2:
+                print("solved in ", i)
+                break
+            if i == 10:
+                print("Error: not converging")
+                exit()
+
+        self.X_to_V(self.V, p_g)
+
     def NMstep(self, h=1e-2):
         P = sim.fix_left_end(self.V)
         p_g = np.copy(self.p)
         for its in range(100):
             NewtonMax = 100
             for i in range(NewtonMax):
-                forces = self.f + self.K.dot(self.x - self.p)
+                forces = self.f + self.K.dot(self.x - p_g)
 
                 # f_block = forces
                 # f_grad_block = np.matmul(np.matmul(P.T, self.K), P)
