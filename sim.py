@@ -182,7 +182,7 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
         Be = np.matrix([]).reshape(3, 0)
         # print(Be)
         for b in Bs_e+Ba_e:
-            print("     Node ", b.id, b.point)
+            # print("     Node ", b.id, b.point)
             Be = np.concatenate((Be, get_local_B(b, e)), axis=1)
 
 
@@ -209,13 +209,12 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
                 dfxrdxs = r.item(2*s)
                 dfxrdys = r.item(2*s+1)
 
-                K[2*indices[j/2]+kj, 2*indices[s]] += dfxrdxs
-                K[2*indices[j/2]+kj, 2*indices[s]+1] += dfxrdys
+                K[2*indices[j/2]+kj, 2*indices[s]] -= dfxrdxs
+                K[2*indices[j/2]+kj, 2*indices[s]+1] -= dfxrdys
 
             j+=1
         elem+=1
 
-    K = -1*K
     # print("STIFFNESS")
     # print(K)
 

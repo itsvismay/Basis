@@ -88,18 +88,20 @@ class Mesh:
         self.X_to_V(self.V, self.p)
 
     def NM_static(self):
+        # print(self.K)
         P = sim.fix_left_end(self.V)
         p_g = np.copy(self.p)
         NewtonMax = 100
         for i in range(NewtonMax):
-            forces = self.f + self.K.dot(self.x - p_g)
+            forces = self.f + self.K.dot(p_g - self.x)
 
             g_block = P.T.dot(forces)
             grad_g_block = np.matmul(np.matmul(P.T, self.K), P)
 
             Q,R = np.linalg.qr(grad_g_block)
-            Qg = Q.T.dot(g_block)
-            dp = -1*np.linalg.solve(R, Qg)
+            Qg = Q.T.dot(-1*g_block)
+            dp = np.linalg.solve(R, Qg)
+            # print(dp)
             p_g += P.dot(dp)
 
             print("gblock norm")
@@ -111,8 +113,8 @@ class Mesh:
             if i == 10:
                 print("Error: not converging")
                 exit()
-
-        self.X_to_V(self.V, p_g)
+        self.p = copy.copy(p_g)
+        self.X_to_V(self.V, self.p)
 
     def NMstep(self, h=1e-2):
         P = sim.fix_left_end(self.V)
@@ -120,7 +122,7 @@ class Mesh:
         for its in range(100):
             NewtonMax = 100
             for i in range(NewtonMax):
-                forces = self.f + self.K.dot(self.x - p_g)
+                forces = self.f + self.K.dot(p_g - self.x)
 
                 # f_block = forces
                 # f_grad_block = np.matmul(np.matmul(P.T, self.K), P)
@@ -212,7 +214,6 @@ def get_mesh_from_displacement(actNodes, EmbeddingNodes):
     sim.compute_gravity(f_L, M_L)
     sim.set_x_initially(x_L, sortedFlatB, map_nodes)
 
-    print(K_L)
     # exit()
     # M_L += 1*np.identity(2*nonDuplicateSize)
     print("M is SPD ", utils.is_sym_pos_def(M_L))
@@ -235,15 +236,15 @@ def display_mesh(mesh, Ek=None):
     K_k = np.zeros((2*mesh.nonDupSize, 2*mesh.nonDupSize))
     sim.compute_stiffness(K_k, mesh.sortedFlatB, mesh.map_nodes, Youngs=Ek)
     mesh.reset(Knew=K_k)
-    # mesh.NM_static()
+    mesh.NM_static()
     def key_down(viewer, key, modifier):
-        mesh.NMstep()
+        # mesh.NMstep()
         # mesh.step()
         Emesh = mesh.get_embedded_mesh()
 
         viewer.data.clear()
-        V1 = igl.eigen.MatrixXd(Emesh)
-        F1 = igl.eigen.MatrixXi(mesh.EmbeddedTri)
+        V1 = igl.eigen.MatrixXd(mesh.V)
+        F1 = igl.eigen.MatrixXi(mesh.tri)
         viewer.data.set_mesh(V1, F1)
         # print(V1)
         # viewer.data.add_points(V1, igl.eigen.MatrixXd([[0,1,0]]))
@@ -289,37 +290,41 @@ def set_up_solver():
 
     # FOR L3 MESH
     # print("L Mesh")
-    u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    actNodes_L = sim.get_active_nodes([hMesh[0]], dom, u_f=u_f_L)
-    mesh_L = get_mesh_from_displacement(actNodes_L, [n for n in hMesh[0].nodes])
-    eigvals, eigvecs = utils.general_eig_solve(mesh_L.K, mesh_L.M)
+    # u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # actNodes_L = sim.get_active_nodes([hMesh[0]], dom, u_f=u_f_L)
+    # mesh_L = get_mesh_from_displacement(actNodes_L, [n for n in hMesh[2].nodes])
+    # eigvals, eigvecs = utils.general_eig_solve(mesh_L.K, mesh_L.M)
+    # tot = 0
+    # for i in range(mesh_L.M.shape[0]):
+    #     tot +=sum(mesh_L.M[i])
+    # print(tot)
     # # print(eigvecs[:,3])
-    display_mesh(mesh_L)
+    # display_mesh(mesh_L)
 
 
     #FOR H MESH
-    # print("H Mesh")
-    # l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
-    # n1 = l1_e[0]
-    # n2 = l1_e[1]
-    # n3 = l1_e[2]
-    # n4 = l1_e[3]
+    print("H Mesh")
+    l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
+    n1 = l1_e[0]
+    n2 = l1_e[1]
+    n3 = l1_e[2]
+    n4 = l1_e[3]
     # u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # # u_f_H = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # # u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    #
-    # # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,9], mesh_L.map_nodes)
-    # # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,5], mesh_L.map_nodes)
-    # actNodes_H = sim.get_active_nodes(hMesh, dom, tolerance=1e-3, u_f=u)
-    # nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
-    # mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[2].nodes])
-    # E_0 = np.empty(len(mesh_H.activeElems))
-    # E_0.fill(GV.Global_Youngs*1.0)
-    # # M_f = np.matmul(np.matmul(mesh_H.Nc.T, mesh_L.M), mesh_H.Nc)
-    # # M_c = mesh_H.M
-    # # arb_v = np.zeros(2*mesh_H.nonDupSize)
-    # # display_mesh(mesh_H, E_0)
+    # u = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+
+    # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,9], mesh_L.map_nodes)
+    # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,5], mesh_L.map_nodes)
+    actNodes_H = sim.get_active_nodes(hMesh, dom, tolerance=1e-3, u_f=u)
+    nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
+    mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[2].nodes])
+    E_0 = np.empty(len(mesh_H.activeElems))
+    E_0.fill(GV.Global_Youngs*1.0)
+    # M_f = np.matmul(np.matmul(mesh_H.Nc.T, mesh_L.M), mesh_H.Nc)
+    # M_c = mesh_H.M
+    # arb_v = np.zeros(2*mesh_H.nonDupSize)
+    display_mesh(mesh_H, E_0)
 
 
     # Ek = solve(mesh_L, mesh_H)
