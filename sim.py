@@ -261,10 +261,10 @@ def compute_force(f, B, map_node_id_to_index, x = None):
             for phi in Ba_e:
                 Integrate_f(f, map_node_id_to_index, phi, e, x)
 
-def compute_gravity(f, M):
+def compute_gravity(f, M, axis, mult=1):
     for i in range(f.shape[0]):
-        if(i%2 == 0):
-            f[i] = sum(M[i])*-9.8
+        if(i%2 == axis):
+            f[i] = sum(M[i])*-9.8*mult
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
