@@ -103,20 +103,21 @@ class Mesh:
         # invMhhK = np.linalg.inv(self.M - h*h*self.K)
         P = sim.fix_left_end(self.V)
 
-        for i in range (10):
+        for i in range (1):
             self.p = self.p + h*np.matmul(P, P.T).dot(self.v)
             forces = self.f + self.K.dot(self.p - self.x)
-            # self.v = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
-            print(self.p)
+            self.v = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
+            print("f", forces)
+            # print(self.p)
             # print(self.v)
-            newv = np.copy(self.v)
-            func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
-            def constr(x):
-                return x - (self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))))
-            cons = ({'type': 'eq', 'fun': constr })
-
-            res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
-            self.v = copy.copy(res.x)
+            # newv = np.copy(self.v)
+            # func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
+            # def constr(x):
+            #     return x - (self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))))
+            # cons = ({'type': 'eq', 'fun': constr })
+            #
+            # res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
+            # self.v = copy.copy(res.x)
 
 
 
@@ -263,10 +264,10 @@ def display_mesh(mesh, Ek=None):
     mesh.reset(Knew=K_k)
     # mesh.NM_static()
     def key_down(viewer, key, modifier):
-        # mesh.NMstep()
         mesh.step()
-        # print(mesh.p)
-        # print(mesh.v)
+        # mesh.NMstep()
+        print(mesh.p)
+        print(mesh.v)
         Emesh = mesh.get_embedded_mesh()
 
         viewer.data.clear()

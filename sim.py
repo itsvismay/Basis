@@ -303,7 +303,7 @@ def fix_left_end(V):
             to_fix.append(vert_ind)
         vert_ind +=1
 
-    # to_fix = []
+    to_fix = []
     P1 = np.delete(np.eye(V.shape[0]), to_fix, axis =1)
     P = np.kron(P1, np.eye(2))
     # print(np.matmul(P, P.T))
