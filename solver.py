@@ -73,7 +73,7 @@ class Mesh:
         P = sim.fix_left_end(self.V)
         p_g = np.copy(self.p)
         f_ext = np.zeros(len(self.f))
-        sim.compute_gravity(f_ext, self.M, 0, -10)
+        sim.compute_gravity(f_ext, self.M, self.sortedFlatB, self.map_nodes, axis=0, mult=-10)
         NewtonMax = 100
         for i in range(NewtonMax):
             forces = f_ext + self.K.dot(p_g - self.x)
@@ -102,14 +102,15 @@ class Mesh:
     def step(self, h=1e-2):
         # invMhhK = np.linalg.inv(self.M - h*h*self.K)
         P = sim.fix_left_end(self.V)
-
+        print("Mass")
+        print(self.M)
         for i in range (1):
             self.p = self.p + h*np.matmul(P, P.T).dot(self.v)
             forces = self.f + self.K.dot(self.p - self.x)
             self.v = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
             print("f", forces)
-            # print(self.p)
-            # print(self.v)
+            print("p", self.p)
+            print(self.K.dot(self.x - self.p))
             # newv = np.copy(self.v)
             # func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
             # def constr(x):
@@ -235,7 +236,7 @@ def get_mesh_from_displacement(actNodes, EmbeddingNodes):
 
     sim.compute_mass(M_L, sortedFlatB, map_nodes)
     sim.compute_stiffness(K_L, sortedFlatB, map_nodes)
-    sim.compute_gravity(f_L, M_L, 1)
+    sim.compute_gravity(f_L, M_L, sortedFlatB, map_nodes, axis=1)
     sim.set_x_initially(x_L, sortedFlatB, map_nodes)
 
     # exit()
@@ -266,8 +267,8 @@ def display_mesh(mesh, Ek=None):
     def key_down(viewer, key, modifier):
         mesh.step()
         # mesh.NMstep()
-        print(mesh.p)
-        print(mesh.v)
+        # print(mesh.p)
+        # print(mesh.v)
         Emesh = mesh.get_embedded_mesh()
 
         viewer.data.clear()

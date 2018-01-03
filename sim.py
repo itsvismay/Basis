@@ -119,7 +119,7 @@ def AnotherQuadratureMethod(b1, b2, e):
 
 def Integrate_M(M, map_node_id_to_index, b1, b2, e):
     # print("         Integrate ", b1.id, b2.id)
-    density = 100
+    density = 10
     mass = AnotherQuadratureMethod(b1, b2, e)*density
 
     # print(map_node_id_to_index[b1.id], map_node_id_to_index[b2.id], mass)
@@ -127,34 +127,33 @@ def Integrate_M(M, map_node_id_to_index, b1, b2, e):
     M[2*map_node_id_to_index[b1.id]+1, 2*map_node_id_to_index[b2.id]+1] += mass
     return mass
 
-def Integrate_f(f, map_node_id_to_index, b, e, x = None):
-    if(x is None):
-        return
+def Integrate_f(b, e):
+    DEPTH = 5
+    #Mentioned by Dave: Divide up the triangles into pieces,
+    #and integrate using 1 point quadrature, multiply by area
+    def break_up_triangle(p1, p2, p3, depth):
+        if(depth == 0):
+            area = np.linalg.norm(np.cross((p1 - p2), (p1 - p3)))*0.5
+            centroid_x = (p1[0] + p2[0] + p3[0])/3.0
+            centroid_y = (p1[1] + p2[1] + p3[1])/3.0
+            # print("AREA ",area)
+            # print("CENTROID ", centroid_x, centroid_y)
+            height = basis_value_over_e_at_xy(b, e, centroid_x, centroid_y)
+            return height*area
+        else:
+            centroid = np.array([(p1[0] + p2[0] + p3[0])/3.0, (p1[1] + p2[1] + p3[1])/3.0])
+            #tri 1
+            t1 = break_up_triangle(centroid, p1, p2, depth-1)
+            #tri 2
+            t2 = break_up_triangle(centroid, p1, p3, depth-1)
+            #tri 3
+            t3 = break_up_triangle(centroid, p3, p2, depth-1)
+            return t1+t2+t3
 
-    if not basis_supports_cell(b, e):
-        return
+    integral = break_up_triangle(e.n1.point[:2], e.n2.point[:2], e.n3.point[:2], DEPTH)
 
-    p0 = np.array([b.point[0], b.point[1], 1])
-    p1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
-    p2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
-    p3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
+    return integral
 
-    tet_vol = (1.0/6)*utils.volume_of_tet(p0, p1, p2, p3)
-    rec_vol = 0.0
-    if(p1[2] < p2[2]):
-        rec_vol += e.get_area()*p1[2]
-    else:
-        rec_vol += e.get_area()*p2[2]
-
-    vol = tet_vol + rec_vol
-
-    t = 1.0
-    a = 30
-    force_x = (t/(2*e.get_area()))*vol*a*x[map_node_id_to_index[b.id]]
-    force_y = (t/(2*e.get_area()))*vol*a*x[map_node_id_to_index[b.id]+1]
-
-    f[2*map_node_id_to_index[b.id]] = force_x
-    f[2*map_node_id_to_index[b.id]+1] = force_y
 
 def get_local_B(b, e):
     dB_dx, dB_dy = slope_over_cell(b, e)
@@ -261,10 +260,32 @@ def compute_force(f, B, map_node_id_to_index, x = None):
             for phi in Ba_e:
                 Integrate_f(f, map_node_id_to_index, phi, e, x)
 
-def compute_gravity(f, M, axis=1, mult=1):
-    for i in range(f.shape[0]):
-        if(i%2 == axis):
-            f[i] = sum(M[i])*-9.8*mult
+def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
+    E = set()#set of active cells
+    for n in B:
+        E |= n.in_elements
+
+
+    elem = 0
+    for e in E:
+        # print("Element ", e.id)
+        Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)
+        Ba_e = sorted(list(Ba_(e.ancestor)), key = lambda x: x.id)
+
+        density = 10
+        m_e =e.get_area()*density #area*density
+        g = -9.8
+        mg = m_e*g
+        for b in Bs_e+Ba_e:
+            volN = Integrate_f(b, e)
+            print("     node", b.id, map_node_id_to_index[b.id], axis)
+            f[2*map_node_id_to_index[b.id]+axis] += volN*mg*mult
+
+        elem+=1
+
+    print(f)
+
+
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
