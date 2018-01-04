@@ -1,5 +1,4 @@
 import numpy as np
-import copy
 import dd as ref
 import utilities as utils
 import plotting as plot
@@ -119,7 +118,7 @@ def AnotherQuadratureMethod(b1, b2, e):
 
 def Integrate_M(M, map_node_id_to_index, b1, b2, e):
     # print("         Integrate ", b1.id, b2.id)
-    density = 10
+    density = 100
     mass = AnotherQuadratureMethod(b1, b2, e)*density
 
     # print(map_node_id_to_index[b1.id], map_node_id_to_index[b2.id], mass)
@@ -181,7 +180,7 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
         Be = np.matrix([]).reshape(3, 0)
         # print(Be)
         for b in Bs_e+Ba_e:
-            print("     Node ", b.id, b.point)
+            # print("     Node ", b.id, b.point)
             Be = np.concatenate((Be, get_local_B(b, e)), axis=1)
 
 
@@ -241,24 +240,7 @@ def compute_mass(M, B, map_node_id_to_index):
 
 
 def compute_force(f, B, map_node_id_to_index, x = None):
-    E = set()#set of active cells
-    for n in B:
-        E |= n.in_elements
-
-
-    for e in E:
-        Bs_e = Bs_(e)
-        Ba_e = Ba_(e.ancestor)
-
-        for b in Bs_e:
-            Integrate_f(f, map_node_id_to_index, b, e, x)
-
-            Bs_eNotb = Bs_e - set([b])
-            for phi in Bs_eNotb:
-                Integrate_f(f, map_node_id_to_index, phi, e, x)
-
-            for phi in Ba_e:
-                Integrate_f(f, map_node_id_to_index, phi, e, x)
+    pass
 
 def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
     E = set()#set of active cells
@@ -272,18 +254,21 @@ def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
         Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)
         Ba_e = sorted(list(Ba_(e.ancestor)), key = lambda x: x.id)
 
-        density = 10
+        density = 100
         m_e =e.get_area()*density #area*density
         g = -9.8
         mg = m_e*g
         for b in Bs_e+Ba_e:
             volN = Integrate_f(b, e)
-            print("     node", b.id, map_node_id_to_index[b.id], axis)
+            # print("     node", b.id, map_node_id_to_index[b.id], axis)
             f[2*map_node_id_to_index[b.id]+axis] += volN*mg*mult
 
         elem+=1
-
-    print(f)
+    
+    # Old gravity method
+    # for i in range(f.shape[0]):
+    #     if(i%2 == axis):
+    #         f[i] = sum(M[i])*-9.8*mult
 
 
 
@@ -324,7 +309,7 @@ def fix_left_end(V):
             to_fix.append(vert_ind)
         vert_ind +=1
 
-    to_fix = []
+    # to_fix = []
     P1 = np.delete(np.eye(V.shape[0]), to_fix, axis =1)
     P = np.kron(P1, np.eye(2))
     # print(np.matmul(P, P.T))
@@ -445,7 +430,7 @@ def start():
     # exit()
 
     global p
-    p = copy.copy(x)
+    p = np.copy(x)
 
     def draw():
         global p

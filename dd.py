@@ -311,8 +311,7 @@ class Level:
         for n in self.nodes:
             n.update_basis()
 
-        # for n in nodes:
-        #     print(np.array(n.basis))
+        # self.elements
 
     #basis equation for b1 over element e
     def basis_value_over_e_at_xy(self, b, e, x, y):
@@ -445,7 +444,7 @@ class Level:
         lk = Level(self.domain)
 
         #starts iterative split using dict (key = node1, key = node2) => val = in-between node
-        for e in self.elements:
+        for e in sorted(list(self.elements), key=lambda e: e.id):
             lk.add_elements(e.split(self.splitnodedict))
 
 
@@ -463,7 +462,7 @@ def solve(levels, u_f, toll):
     bases = []
     nodes = []
     for l in levels:
-        for n in l.nodes:
+        for n in sorted(list(l.nodes), key=lambda x:x.id):
             n.active = False
             bases.append(np.ravel(n.basis))
             nodes.append(n)
@@ -475,6 +474,7 @@ def solve(levels, u_f, toll):
     epsilon = np.array([toll for k in range(2*N.shape[0])])
     bigU = epsilon + np.concatenate((u, -1*u), axis=0)
     bigN = np.concatenate((N, -1*N), axis=0)
+
 
     res = linprog(c, A_ub = bigN, b_ub = bigU, options={"disp": True})
     # print(res)

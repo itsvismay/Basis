@@ -4,7 +4,6 @@ import utilities as utils
 import global_variables as GV
 
 import numpy as np
-import copy
 from scipy.optimize import minimize
 from scipy.spatial import Delaunay
 import scipy
@@ -21,7 +20,7 @@ class Mesh:
 
     def __init__(self, x, v, f, M, K, activeElems, sortedFlatB, map_nodes, nonDupSize, EmbeddingNodes):
         self.x = x
-        self.p = copy.copy(x)
+        self.p = np.copy(x)
         self.v = v
         self.f = f
         self.M = M
@@ -55,11 +54,11 @@ class Mesh:
     def reset(self, Knew=None):
         if(Knew is not None):
             self.K = Knew
-            self.p = copy.copy(self.x)
+            self.p = np.copy(self.x)
             self.v = np.zeros(len(self.p))
             self.X_to_V(self.V, self.p)
         else:
-            self.p = copy.copy(self.x)
+            self.p = np.copy(self.x)
             self.v = np.zeros(len(self.p))
             self.X_to_V(self.V, self.p)
 
@@ -96,21 +95,21 @@ class Mesh:
             if i == 10:
                 print("Error: not converging")
                 exit()
-        self.p = copy.copy(p_g)
+        self.p = np.copy(p_g)
         self.X_to_V(self.V, self.p)
 
-    def step(self, h=1e-2):
+    def step(self, h=1e-3):
         # invMhhK = np.linalg.inv(self.M - h*h*self.K)
         P = sim.fix_left_end(self.V)
-        print("Mass")
-        print(self.M)
-        for i in range (1):
+        # print("Mass")
+        # print(self.M)
+        for i in range (100):
             self.p = self.p + h*np.matmul(P, P.T).dot(self.v)
             forces = self.f + self.K.dot(self.p - self.x)
             self.v = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
-            print("f", forces)
-            print("p", self.p)
-            print(self.K.dot(self.x - self.p))
+            # print("f", self.f)
+            # print("p", self.p)
+            # print("v", self.v)
             # newv = np.copy(self.v)
             # func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
             # def constr(x):
@@ -118,13 +117,13 @@ class Mesh:
             # cons = ({'type': 'eq', 'fun': constr })
             #
             # res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
-            # self.v = copy.copy(res.x)
+            # self.v = np.copy(res.x)
 
 
 
         self.X_to_V(self.V, self.p)
 
-    def new_verlet_step(self, h=1e-2):
+    def new_verlet_step(self, h=1e-3):
         P = sim.fix_left_end(self.V)
 
         p_g = self.p + h*np.matmul(P, P.T).dot(self.v)
@@ -139,7 +138,7 @@ class Mesh:
         res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
         return p_g, res.x
 
-    def NMstep(self, h=1e-2):
+    def NMstep(self, h=1e-1):
         P = sim.fix_left_end(self.V)
         p_g = np.copy(self.p)
 
@@ -169,7 +168,7 @@ class Mesh:
                     exit()
 
             self.v = (p_g - self.p)/h
-            self.p = copy.copy(p_g)
+            self.p = np.copy(p_g)
         self.X_to_V(self.V, self.p)
 
 
@@ -244,15 +243,11 @@ def get_mesh_from_displacement(actNodes, EmbeddingNodes):
     print("M is SPD ", utils.is_sym_pos_def(M_L))
 
     # exit()
-    print("Active Elements")
     E = set()#set of active cells
     for n in sortedFlatB:
         E |= n.in_elements
-        # print(n)
 
-    print(E)
     mesh = Mesh(x_L, v_L, f_L, M_L, K_L, E, sortedFlatB, map_nodes, nonDuplicateSize, EmbeddingNodes)
-
 
     return mesh
 
@@ -265,12 +260,10 @@ def display_mesh(mesh, Ek=None):
     mesh.reset(Knew=K_k)
     # mesh.NM_static()
     def key_down(viewer, key, modifier):
-        mesh.step()
-        # mesh.NMstep()
-        # print(mesh.p)
-        # print(mesh.v)
-        Emesh = mesh.get_embedded_mesh()
+        # mesh.step()
+        mesh.NMstep()
 
+        Emesh = mesh.get_embedded_mesh()
         viewer.data.clear()
         V1 = igl.eigen.MatrixXd(Emesh)
         F1 = igl.eigen.MatrixXi(mesh.EmbeddedTri)
@@ -321,7 +314,6 @@ def solve(meshL, meshH, K_E=None, E_0=None):
     # res = minimize(func, E_0, method='Nelder-Mead', bounds=bnds, options={"disp": True, "fatol":1e-2})
     # sim.compute_stiffness(K_k, meshH.sortedFlatB, meshH.map_nodes, Youngs=res.x)
     # meshH.reset(Knew = K_k)
-    print("hi")
     return 0
     # return res.x
 
@@ -397,10 +389,9 @@ def set_up_solver():
     # FOR L3 MESH
     # print("L Mesh")
     u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    actNodes_L = sim.get_active_nodes([hMesh[0]], dom, u_f=u_f_L)
-    mesh_L = get_mesh_from_displacement(actNodes_L, [n for n in hMesh[0].nodes])
+    actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
+    mesh_L = get_mesh_from_displacement(actNodes_L, [n for n in hMesh[2].nodes])
     eigvals, eigvecs = utils.general_eig_solve(mesh_L.K, mesh_L.M)
-    # # print(eigvecs[:,3])
     # display_mesh(mesh_L)
 
 
@@ -413,6 +404,7 @@ def set_up_solver():
     n4 = l1_e[3]
     # u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u[1][1] = 2
     # u_f_H = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
 
@@ -420,13 +412,13 @@ def set_up_solver():
     # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,5], mesh_L.map_nodes)
     print(u)
     actNodes_H = sim.get_active_nodes(hMesh, dom, tolerance=1e-3, u_f=u)
+    # print("after the optimzation")
+    # print(actNodes_H)
     nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
     mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[2].nodes])
     E_0 = np.empty(len(mesh_H.activeElems))
     E_0.fill(GV.Global_Youngs*1.0)
-    # M_f = np.matmul(np.matmul(mesh_H.Nc.T, mesh_L.M), mesh_H.Nc)
-    # M_c = mesh_H.M
-    # arb_v = np.zeros(2*mesh_H.nonDupSize)
+
     display_mesh(mesh_H, E_0)
 
 
