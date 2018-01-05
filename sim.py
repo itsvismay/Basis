@@ -6,8 +6,6 @@ import math
 
 from scipy.spatial import Delaunay
 np.set_printoptions(threshold="nan", linewidth=190, precision=3, formatter={'all': lambda x:'{:2.2f}'.format(x)})
-import sys, os
-sys.path.insert(0, os.getcwd()+"/../libigl/python/")
 import pyigl as igl
 import global_variables as GV
 # import render as renderer

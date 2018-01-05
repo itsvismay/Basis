@@ -1,5 +1,8 @@
 import numpy as np
 import scipy
+import sys, os
+sys.path.insert(0, os.getcwd()+"/../libigl/python/")
+import pyigl as igl
 
 def dist(p1, p2):
     return np.linalg.norm(p1-p2)
@@ -66,3 +69,6 @@ def general_eig_solve(A, B):
     # print(eigvals)
 
     return eigvals, eigvecs
+
+def serialize_mesh(name, V, F):
+    igl.writeOBJ(name, igl.eigen.MatrixXd(V), igl.eigen.MatrixXi(F))

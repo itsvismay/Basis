@@ -8,7 +8,6 @@ from scipy.optimize import minimize
 from scipy.spatial import Delaunay
 import scipy
 import sys, os
-sys.path.insert(0, os.getcwd()+"/../libigl/python/")
 import pyigl as igl
 np.set_printoptions(threshold="nan", linewidth=190, precision=8, formatter={'all': lambda x:'{:2.2f}'.format(x)})
 
@@ -361,7 +360,8 @@ def set_up_solver():
     # print()
     # print(mesh_L.M)
     # print(eigvecs[:,3])
-    display_mesh(mesh_L)
+    # display_mesh(mesh_L)
+    utils.serialize_mesh("mesh2.obj", mesh_L.V, mesh_L.tri)
 
 
     #FOR H MESH
