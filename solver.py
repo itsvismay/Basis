@@ -51,16 +51,18 @@ class Mesh:
 
         return Emesh, Delaunay(Emesh).simplices
 
-    def reset(self, Knew=None):
+    def reset(self, Knew=None, reset_p=True):
         if(Knew is not None):
-            self.K = Knew
-            self.p = np.copy(self.x)
-            self.v = np.zeros(len(self.p))
-            self.X_to_V(self.V, self.p)
+            self.K = np.copy(Knew)
+            if(reset_p):
+                self.p = np.copy(self.x)
+                self.v = np.zeros(len(self.p))
+                self.X_to_V(self.V, self.p)
         else:
-            self.p = np.copy(self.x)
-            self.v = np.zeros(len(self.p))
-            self.X_to_V(self.V, self.p)
+            if(reset_p):
+                self.p = np.copy(self.x)
+                self.v = np.zeros(len(self.p))
+                self.X_to_V(self.V, self.p)
 
     def X_to_V(self, V, x):
         for i in range(V.shape[0]):
@@ -119,8 +121,6 @@ class Mesh:
             # res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
             # self.v = np.copy(res.x)
 
-
-
         self.X_to_V(self.V, self.p)
 
     def new_verlet_step(self, h=1e-3):
@@ -128,15 +128,16 @@ class Mesh:
 
         p_g = self.p + h*np.matmul(P, P.T).dot(self.v)
         forces = self.f + self.K.dot(p_g - self.x)
+        v_g = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
 
-        newv = np.copy(self.v)
-        func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
-        def constr(x):
-            return x - (self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))))
-        cons = ({'type': 'eq', 'fun': constr })
-
-        res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
-        return p_g, res.x
+        # newv = np.copy(self.v)
+        # func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
+        # def constr(x):
+        #     return x - (self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))))
+        # cons = ({'type': 'eq', 'fun': constr })
+        #
+        # res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
+        return p_g, v_g
 
     def NMstep(self, h=1e-1):
         P = sim.fix_left_end(self.V)
@@ -260,8 +261,8 @@ def display_mesh(mesh, Ek=None):
     mesh.reset(Knew=K_k)
     # mesh.NM_static()
     def key_down(viewer, key, modifier):
-        # mesh.step()
-        mesh.NMstep()
+        mesh.step()
+        # mesh.NMstep()
 
         Emesh = mesh.get_embedded_mesh()
         viewer.data.clear()
@@ -281,17 +282,16 @@ def solve(meshL, meshH, K_E=None, E_0=None):
     print("Youngs Solve")
 
     bnds = ((0, None) for i in range(len(E_0)))
-    timestep = 1e-2
+    timestep = 1e-3
 
     print("Ek")
     print(E_0)
-    print(meshH.activeElems)
+    # print(meshH.activeElems)
     def func(E_k):
         #v_squiggle(E_squiggle, F_squiggle)
         print("why is this running")
         print(E_k)
-        sim.compute_stiffness(K_E, meshH.sortedFlatB, meshH.map_nodes, Youngs=E_k)
-        meshH.reset(Knew=K_E)
+        sim.compute_stiffness(meshH.K, meshH.sortedFlatB, meshH.map_nodes, Youngs=E_k)
         p_squiggle, v_squiggle = meshH.new_verlet_step(h=timestep)
 
         #Term 1: 0.5*v~^T* N^T*M*N *v~
@@ -308,22 +308,27 @@ def solve(meshL, meshH, K_E=None, E_0=None):
         t4 = -1*timestep*np.dot(meshH.Nc.T.dot(meshL.f), v_squiggle)
 
         no = t1+t2+t3+t4
-        print("     ",no, t1, t2, t3, t4)
-        return 0
+        # print("     ",no, t1, t2, t3, t4)
+        return no
 
-    # res = minimize(func, E_0, method='Nelder-Mead', bounds=bnds, options={"disp": True, "fatol":1e-2})
-    # sim.compute_stiffness(K_k, meshH.sortedFlatB, meshH.map_nodes, Youngs=res.x)
-    # meshH.reset(Knew = K_k)
-    return 0
-    # return res.x
+    res = minimize(func, E_0, method='Nelder-Mead', bounds=bnds, options={"disp": True, "fatol":1e-2})
+    sim.compute_stiffness(meshH.K, meshH.sortedFlatB, meshH.map_nodes, Youngs=res.x)
+    print("result")
+    print(res.x)
+    print(meshH.K)
+    return res.x
+
+    # sim.compute_stiffness(meshH.K, meshH.sortedFlatB, meshH.map_nodes, Youngs=E_0)
+    # return 0
 
 def new_display_mesh(meshL, meshH, Kk=None, Ek=None):
     viewer = igl.viewer.Viewer()
     time = 0
+    # solve(meshL, meshH, K_E = Kk, E_0=Ek)
 
     def key_down(viewer, key, modifier):
-        solve(meshL, meshH,K_E = Kk, E_0=Ek)
         meshH.step()
+        print(meshH.K)
         print(meshH.p)
         print(meshH.v)
         Emesh = meshH.get_embedded_mesh()
@@ -340,24 +345,27 @@ def new_display_mesh(meshL, meshH, Kk=None, Ek=None):
 
 def set_up_solver():
 
-    # hMesh = sim.get_hierarchical_mesh(dom)
-    #
-    # # FOR L3 MESH
-    # print("L Mesh")
-    # u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
-    # mesh_L = get_mesh_from_displacement(actNodes_L, EmbeddingNodes=[n for n in hMesh[2].nodes])
-    # eigvals, eigvecs = utils.general_eig_solve(mesh_L.K, mesh_L.M)
-    # ## tot = 0
-    # ## for i in range(mesh_L.M.shape[0]):
-    # ##     tot +=sum(mesh_L.M[i])
-    # ## print(tot)
-    # ## print(eigvecs[:,3])
-    # # display_mesh(mesh_L)
-    #
-    #
-    # #FOR H MESH
-    # print("H Mesh")
+    hMesh = sim.get_hierarchical_mesh(dom)
+
+    # FOR L3 MESH
+    print("L Mesh")
+    u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    actNodes_L = sim.get_active_nodes([hMesh[0]], dom, u_f=u_f_L)
+    mesh_L = get_mesh_from_displacement(actNodes_L, EmbeddingNodes=[n for n in hMesh[2].nodes])
+    eigvals, eigvecs = utils.general_eig_solve(mesh_L.K, mesh_L.M)
+    # tot = 0
+    # for i in range(mesh_L.M.shape[0]):
+    #     tot +=sum(mesh_L.M[i])
+    # print(tot)
+    # print(mesh_L.K)
+    # print()
+    # print(mesh_L.M)
+    # print(eigvecs[:,3])
+    display_mesh(mesh_L)
+
+
+    #FOR H MESH
+    print("H Mesh")
     # l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
     # n1 = l1_e[0]
     # n2 = l1_e[1]
@@ -378,54 +386,11 @@ def set_up_solver():
     # E_0 = np.empty(len(mesh_H.activeElems))
     # E_0.fill(GV.Global_Youngs*1)
     # K_0 = np.zeros((2*mesh_H.nonDupSize, 2*mesh_H.nonDupSize))
-    # # new_display_mesh(mesh_L, mesh_H, K_0, E_0)
-    #
-    # # Ek = solve(mesh_L, mesh_H)
-    # # print("New Ek", Ek)
-    # display_mesh(mesh_H, E_0)
-
-    hMesh = sim.get_hierarchical_mesh(dom)
-
-    # FOR L3 MESH
-    # print("L Mesh")
-    u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    actNodes_L = sim.get_active_nodes([hMesh[2]], dom, u_f=u_f_L)
-    mesh_L = get_mesh_from_displacement(actNodes_L, [n for n in hMesh[2].nodes])
-    eigvals, eigvecs = utils.general_eig_solve(mesh_L.K, mesh_L.M)
-    # display_mesh(mesh_L)
-
-
-    #FOR H MESH
-    print("H Mesh")
-    l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
-    n1 = l1_e[0]
-    n2 = l1_e[1]
-    n3 = l1_e[2]
-    n4 = l1_e[3]
-    # u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    u[1][1] = 2
-    # u_f_H = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-
-    # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,9], mesh_L.map_nodes)
-    # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,5], mesh_L.map_nodes)
-    print(u)
-    actNodes_H = sim.get_active_nodes(hMesh, dom, tolerance=1e-3, u_f=u)
-    # print("after the optimzation")
-    # print(actNodes_H)
-    nonDuplicateSize, map_duplicate_nodes_to_ind, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes_H)
-    mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[2].nodes])
-    E_0 = np.empty(len(mesh_H.activeElems))
-    E_0.fill(GV.Global_Youngs*1.0)
-
-    display_mesh(mesh_H, E_0)
-
+    # new_display_mesh(mesh_L, mesh_H, K_0, E_0)
 
     # Ek = solve(mesh_L, mesh_H)
     # print("New Ek", Ek)
-    # display_mesh(mesh_H, Ek)
-
+    # display_mesh(mesh_H, E_0)
 
 
 

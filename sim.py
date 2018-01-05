@@ -60,8 +60,8 @@ def slope_over_cell(b, e):
     #a(x - x0) + b(y - y0) + c(z - z0) = 0,
     #a x + b y + c z = d    and
     #z = d + m x + n y
-    x_slope = -1.0*normal[0]/(normal[2])/(2.0*e.get_area())
-    y_slope = -1.0*normal[1]/(normal[2])/(2.0*e.get_area())
+    x_slope = -1.0*normal[0]/(normal[2])#/(2.0*e.get_area())
+    y_slope = -1.0*normal[1]/(normal[2])#/(2.0*e.get_area())
     # print("-----------", b.id, x_slope, y_slope)
     return x_slope, y_slope
 
@@ -118,7 +118,7 @@ def AnotherQuadratureMethod(b1, b2, e):
 
 def Integrate_M(M, map_node_id_to_index, b1, b2, e):
     # print("         Integrate ", b1.id, b2.id)
-    density = 100
+    density = 1000
     mass = AnotherQuadratureMethod(b1, b2, e)*density
 
     # print(map_node_id_to_index[b1.id], map_node_id_to_index[b2.id], mass)
@@ -164,6 +164,7 @@ def get_local_B(b, e):
 
 #(section 3.3 CHARMS)
 def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
+    K.fill(0)
     E = set()#set of active cells
     for n in B:
         E |= n.in_elements
@@ -189,6 +190,8 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
                         [ GV.Global_Poissons, 1-GV.Global_Poissons, 0],
                         [ 0, 0, 0.5-GV.Global_Poissons]])*(abs(Youngs[elem])/((1+GV.Global_Poissons)*(1-2*GV.Global_Poissons)))
 
+        # print("tri area")
+        # print(e.get_area())
         local_K = (np.transpose(Be)*D*Be)*t*e.get_area()
         # print("Be")
         # print(Be)
@@ -239,8 +242,6 @@ def compute_mass(M, B, map_node_id_to_index):
                 Integrate_M(M, map_node_id_to_index, phi, b, e)
 
 
-def compute_force(f, B, map_node_id_to_index, x = None):
-    pass
 
 def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
     E = set()#set of active cells
@@ -254,7 +255,7 @@ def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
         Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)
         Ba_e = sorted(list(Ba_(e.ancestor)), key = lambda x: x.id)
 
-        density = 100
+        density = 1000
         m_e =e.get_area()*density #area*density
         g = -9.8
         mg = m_e*g
@@ -264,7 +265,7 @@ def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
             f[2*map_node_id_to_index[b.id]+axis] += volN*mg*mult
 
         elem+=1
-    
+
     # Old gravity method
     # for i in range(f.shape[0]):
     #     if(i%2 == axis):
