@@ -70,5 +70,7 @@ def general_eig_solve(A, B):
 
     return eigvals, eigvecs
 
-def serialize_mesh(name, V, F):
+def serialize_mesh(name, mesh):
+    V = []
+    F = []
     igl.writeOBJ(name, igl.eigen.MatrixXd(V), igl.eigen.MatrixXi(F))

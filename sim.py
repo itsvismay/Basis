@@ -254,16 +254,16 @@ def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
         Ba_e = sorted(list(Ba_(e.ancestor)), key = lambda x: x.id)
 
         density = 1000
-        m_e =e.get_area()*density #area*density
         g = -9.8
-        mg = m_e*g
         for b in Bs_e+Ba_e:
-            volN = Integrate_f(b, e)
+            volN = Integrate_f(b, e)*density
             # print("     node", b.id, map_node_id_to_index[b.id], axis)
-            f[2*map_node_id_to_index[b.id]+axis] += volN*mg*mult
+            f[2*map_node_id_to_index[b.id]+axis] += volN*g*mult
 
         elem+=1
 
+    # print("Force")
+    # print(f)
     # Old gravity method
     # for i in range(f.shape[0]):
     #     if(i%2 == axis):
@@ -275,7 +275,8 @@ def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
     l2 = l1.split()
     l3 = l2.split()
-    return [l1, l2, l3]
+    l4 = l3.split()
+    return [l1, l2, l3, l4]
     # return [l3]
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001, u_f=None):
