@@ -214,8 +214,6 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
             j+=1
         elem+=1
 
-    # print("STIFFNESS")
-    # print(K)
 
 
 def compute_mass(M, B, map_node_id_to_index):
@@ -262,14 +260,6 @@ def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
 
         elem+=1
 
-    # print("Force")
-    # print(f)
-    # Old gravity method
-    # for i in range(f.shape[0]):
-    #     if(i%2 == axis):
-    #         f[i] = sum(M[i])*-9.8*mult
-
-
 
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
@@ -277,18 +267,12 @@ def get_hierarchical_mesh(dom):
     l3 = l2.split()
     l4 = l3.split()
     return [l1, l2, l3, l4]
-    # return [l3]
+
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001, u_f=None):
     if(u_f == None):
-        l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
-        n1 = l1_e[0]
-        n2 = l1_e[1]
-        n3 = l1_e[2]
-        n4 = l1_e[3]
-        u_f = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-        # u_f = [[2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-
+        print("ERROR: sim.py get_active_nodes")
+        exit()
     aN = ref.solve(hMesh, u_f, tolerance)
     return aN
 

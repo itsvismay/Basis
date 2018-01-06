@@ -477,12 +477,11 @@ def solve(levels, u_f, toll):
 
 
     res = linprog(c, A_ub = bigN, b_ub = bigU, options={"disp": True})
-    # print(res)
 
     NodesUsedByLevel = [[] for l in range(Level.number)]
 
     for i in range(0,len(res.x)):
-        if (res.x[i]>0):
+        if (res.x[i]>1e-10):
             res.x[i] = 1
             # print("used node id: ", nodes[i])
             nodes[i].active = True
