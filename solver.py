@@ -282,7 +282,7 @@ def display_mesh(mesh, Ek=None):
     sim.compute_stiffness(mesh.K, mesh.sortedFlatB, mesh.map_nodes, Youngs=Ek)
     mesh.reset()
     # mesh.NM_static()
-    def key_down(viewer, key, modifier):
+    def key_down(viewer):
         mesh.step()
         # mesh.NMstep()
 
@@ -293,9 +293,9 @@ def display_mesh(mesh, Ek=None):
         viewer.data.set_mesh(V1, F1)
         return True
 
-    key_down(viewer, ord('5'), 0)
+    key_down(viewer)
     viewer.core.is_animating = True
-    viewer.callback_key_down = key_down
+    viewer.callback_post_draw = key_down
     viewer.launch()
 
 
@@ -304,7 +304,7 @@ def solve(meshL, meshH, E_0=None):
     print("Youngs Solve")
 
     bnds = ((0, None) for i in range(len(E_0)))
-    timestep = 1e-3
+    timestep = 1e-1
 
     print("Ek")
     print(E_0)
@@ -340,7 +340,7 @@ def solve(meshL, meshH, E_0=None):
         print(E_k)
         return np.fabs(no)
 
-    res = minimize(func, E_0, method='Nelder-Mead',tol=100, options={"disp": True})
+    res = minimize(func, E_0, method='CG', tol=1e-2, options={'disp': True})
     sim.compute_stiffness(meshH.K, meshH.sortedFlatB, meshH.map_nodes, Youngs=res.x)
     # print("result")
     print(res)
@@ -353,10 +353,12 @@ def solve(meshL, meshH, E_0=None):
 def new_display_mesh(meshL, meshH, Ek=None):
     viewer = igl.viewer.Viewer()
     time = 0
+    # meshH.step()
     Ek = solve(meshL, meshH, E_0=Ek)
     print(Ek)
-    def key_down(viewer, key, modifier):
-        meshH.NMstep()
+    def key_down(viewer):
+        # meshH.NMstep()
+        meshH.step()
         # print(meshH.K)
         # print(meshH.p)
         # print(meshH.v)
@@ -367,9 +369,9 @@ def new_display_mesh(meshL, meshH, Ek=None):
         viewer.data.set_mesh(V1, F1)
         return True
 
-    key_down(viewer, ord('5'), 0)
+    key_down(viewer)
     viewer.core.is_animating = True
-    viewer.callback_key_down = key_down
+    viewer.callback_post_draw = key_down
     viewer.launch()
 
 
@@ -393,21 +395,21 @@ def set_up_solver(fineLevel=2):
     n2 = l1_e[1]
     n3 = l1_e[2]
     n4 = l1_e[3]
-    # u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u[1][1] = 2
     # u = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
 
-    # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,4], mesh_L.map_nodes)
+    sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,4], mesh_L.map_nodes)
     actNodes_H = sim.get_active_nodes(hMesh, dom, tolerance=5e-3, u_f=u)
     mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[fineLevel].nodes])
     print("Afterwards")
     print(mesh_H.sortedFlatB)
     E_0 = np.empty(len(mesh_H.activeElems))
     E_0.fill(GV.Global_Youngs)
-    # E_0 = np.array([17533203.90, 3317551.28, -40692431.83, 9013687.75, -8500958.88, 23138915.98, -5906454.17, 25052118.65, 2966704.83, 10251020.80, -1794946.19, -4623654.03, -14664049.73, -11597206.78,
-    #    2877917.31, 5395967.19, -9792433.91, -29388697.31, 23057458.41, -9274390.36, -6712772.45, -5484241.24, 18452314.21, -167181.90, 25861542.38, -46894.57, 9167026.95])
+    # E_0 =  np.array([133976.09, 142732.94, 83519.35, 94675.98, 90789.00, 120582.21, 40378.85, 50402.73, 86073.33, 105846.86, 120927.38, 78347.65, 147223.67, 80322.28, 84096.08, 106055.73, 109612.69,
+    #    92483.46, 144294.45, 75641.41, 55946.07, 155050.56, 133797.53, 112925.10, 93251.21, 77559.87, 111344.65])
 
 
     # E_0.fill(3e5)
@@ -427,7 +429,7 @@ def set_up_solver(fineLevel=2):
     # for i in range(mesh_H.M.shape[0]):
     #     tot +=sum(mesh_H.M[i])
     # print(tot)
-    # display_mesh(mesh_H, E_0) #dont run because it screws up the velocities used in the E_t+1 solver
+    # display_mesh(mesh_H) #dont run because it screws up the velocities used in the E_t+1 solver
     new_display_mesh(mesh_L, mesh_H, E_0)
 
     # return mesh_L, mesh_H
