@@ -6,6 +6,7 @@ import global_variables as GV
 import numpy as np
 from scipy.optimize import minimize
 from scipy.spatial import Delaunay
+import numdifftools as nd
 import scipy
 import sys, os
 import pyigl as igl
@@ -104,10 +105,11 @@ class Mesh:
         P = sim.fix_left_end(self.V)
         # print("Mass")
         # print(self.M)
-        for i in range (1000):
-            self.p = self.p + h*np.matmul(P, P.T).dot(self.v)
+        for i in range (100):
+            self.p = self.p + h*P.dot(P.T.dot(self.v))
             forces = self.f + self.K.dot(self.p - self.x)
-            self.v = self.v + h*P.dot(P.T.dot(self.invM.dot(forces)))
+            print(P.shape)
+            self.v = self.v + h*P.dot(P.T.dot(np.matmul(self.invM, P).dot(P.T.dot(forces))))
             # print("")
             # print("o", h*self.invM.dot(forces))
             # print("f", h*P.dot(P.T.dot(self.invM.dot(forces))))
@@ -170,7 +172,6 @@ class Mesh:
         v_g = (p_g - self.p)/h
         return p_g, v_g
 
-
     def NMstep(self, h=None):
         P = sim.fix_left_end(self.V)
         p_g = np.copy(self.p)
@@ -203,7 +204,6 @@ class Mesh:
         self.v = (p_g - self.p)/h
         self.p = np.copy(p_g)
         self.X_to_V(self.V, self.p)
-
 
     def get_grid_displacement_norms(self):
         Vx = np.zeros((len(self.x)/2, 2))
@@ -292,20 +292,44 @@ def get_mesh_from_displacement(actNodes, EmbeddingNodes):
 
     return mesh
 
-def display_mesh(mesh):
+def solve(meshL, meshH):
+    print("Old Solve")
+    timestep = 1e-2
+
+    meshL.NMstep(h=timestep)
+    def func(Ek):
+        meshH.resetYM(Ek)
+        p_squiggle, v_squiggle = meshH.new_nm_step(h=timestep)
+        v_proj = meshH.Nc.T.dot(meshL.v)
+
+        #norm projected velocities
+        no = np.linalg.norm(v_squiggle - v_proj)
+        print("     no:", no)
+        return no
+
+    res = minimize(func, meshH.YM, method='COBYLA', options={'disp': True})
+
+    meshH.resetYM(res.x)
+    print("RESULT")
+    print(res)
+
+
+def display_mesh(meshH, meshL=None):
     viewer = igl.viewer.Viewer()
 
-    # mesh.NM_static()
+    if(meshL!=None):
+        meshL.resetMesh()
+        solve(meshL, meshH)
+
     def key_down(viewer):
-        # if(mesh.simSteps<=4):
-        mesh.step(h=1e-4)
-        # mesh.NMstep()
-        Emesh = mesh.get_embedded_mesh()
+        # meshH.NMstep(h=1e-1)
+        meshH.step(h=1e-2)
+        Emesh = meshH.get_embedded_mesh()
         viewer.data.clear()
         V1 = igl.eigen.MatrixXd(Emesh)
-        F1 = igl.eigen.MatrixXi(mesh.EmbeddedTri)
+        F1 = igl.eigen.MatrixXi(meshH.EmbeddedTri)
         viewer.data.set_mesh(V1, F1)
-        mesh.simSteps +=1
+        meshH.simSteps +=1
         return True
 
     key_down(viewer)
@@ -314,9 +338,8 @@ def display_mesh(mesh):
     viewer.launch()
 
 
-
-def solve(meshL, meshH):
-    print("Youngs Solve")
+def new_solve(meshL, meshH):
+    print("New Solve")
 
     bnds = ((0, None) for i in range(len(meshH.YM)))
     timestep = 1e-3
@@ -329,8 +352,8 @@ def solve(meshL, meshH):
     # print(meshH.activeElems)
     def func(E_k):
         #v_squiggle(E_squiggle, F_squiggle)
-        print("why is this running")
-        print(E_k)
+        # print("why is this running")
+        # print(E_k)
         meshH.resetYM(E_k)
 
         # p_squiggle, v_squiggle = meshH.new_verlet_step(h=timestep)
@@ -352,10 +375,15 @@ def solve(meshL, meshH):
 
         no = t1+t2+t3+t4
         print("     no",no, "t1 ",t1, "t2 ",t2, "t3 ",t3, "t4 ",t4)
-        print(E_k)
+        # print(E_k)
         return np.fabs(no)
 
-    res = minimize(func, meshH.YM, method='BFGS', options={'disp': True})
+    def func_der(x):
+        J = nd.Gradient(func)(x)
+        print(">>>>>grad", J, x)
+        return J.ravel()
+
+    res = minimize(func, meshH.YM, method='BFGS', jac=func_der, options={'disp': True})
     meshH.resetYM(res.x)
     print("RESULT")
     print(res)
@@ -367,15 +395,15 @@ def solve(meshL, meshH):
     # sim.compute_stiffness(meshH.K, meshH.sortedFlatB, meshH.map_nodes, Youngs=E_0)
     # return 0
 
-def new_display_mesh(meshL, meshH):
+def new_display_mesh(meshH, meshL):
     viewer = igl.viewer.Viewer()
-    # if(meshH.YM != None):
-        # solve(meshL, meshH)
+    if(meshH.YM != None):
+        new_solve(meshL, meshH)
     def key_down(viewer):
         # if(meshH.simSteps<=5):
-        # meshH.NMstep(h=1e-2)
+        # meshH.step(h=1e-2)
         # if(meshH.YM != None):
-        #     solve(meshL, meshH)
+        #     new_solve(meshL, meshH)
         meshH.NMstep(h=1e-1)
         # print(meshH.K)
         # print("u", meshH.p - meshH.x)
@@ -394,7 +422,6 @@ def new_display_mesh(meshL, meshH):
     viewer.core.is_animating = True
     viewer.callback_post_draw = key_down
     viewer.launch()
-
 
 def set_up_solver(fineLevel=2):
     hMesh = sim.get_hierarchical_mesh(dom)
@@ -427,9 +454,10 @@ def set_up_solver(fineLevel=2):
     # u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
 
     # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,4], mesh_L.map_nodes)
-    actNodes_H = sim.get_active_nodes([hMesh[fineLevel]], dom, tolerance=5e-3, u_f=u)
+    actNodes_H = sim.get_active_nodes([hMesh[1]], dom, tolerance=5e-3, u_f=u)
     mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[fineLevel].nodes])
     print(mesh_H.sortedFlatB)
+
     # exit()
     # E_0 = np.empty(len(mesh_H.activeElems))
     # E_0.fill(GV.Global_Youngs)
@@ -439,8 +467,12 @@ def set_up_solver(fineLevel=2):
 
     # print("Afterwards")
     # print("Original", id(mesh_H.K))
-    # display_mesh(mesh_H) #dont run because it screws up the velocities used in the E_t+1 solver
-    # new_display_mesh(mesh_L, mesh_H)
+
+
+
+
+    # display_mesh(mesh_H, mesh_L) #dont run because it screws up the velocities used in the E_t+1 solver
+    # new_display_mesh(mesh_H, mesh_L)
     # print(mesh_H.K)
     # t = 0
     # for i in range(mesh_H.M.shape[0]):
