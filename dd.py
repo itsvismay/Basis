@@ -101,7 +101,7 @@ class Element:
     def __str__(self):
         return "str elem: "+str(self.id)+", "+str(self.n1)+" "+str(self.n2)+"  "+str(self.n3)
     def __repr__(self):
-        return "repr: "+str(self.id)+" "+str(self.n1.point)+" "+str(self.n2.point)+"  "+str(self.n3.point)
+        return "repr: "+str(self.id)+", nodes "+str(self.n1.id)+" "+str(self.n2.id)+" "+str(self.n3.id)
 
     #Functions
     @staticmethod

@@ -170,7 +170,10 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
     if(Youngs==None):
         Youngs = np.empty(len(E))
         Youngs.fill(GV.Global_Youngs)
+
     elem = 0
+    E = sorted(list(E), key=lambda x:x.id)
+    print(E)
     for e in E:
         # print("Element ", e.id)
         Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)
@@ -222,21 +225,22 @@ def compute_mass(M, B, map_node_id_to_index):
         E |= n.in_elements
 
     for e in E:
-        # print("Element ", e.id)
         Bs_e = Bs_(e)
         Ba_e = Ba_(e.ancestor)
+        tm = 0
         for b in Bs_e:
             # print("     Node ", b.id)
-            Integrate_M(M, map_node_id_to_index, b, b, e)
+            tm+=Integrate_M(M, map_node_id_to_index, b, b, e)
 
             Bs_eNotb = Bs_e - set([b])
             for phi in Bs_eNotb:
-                Integrate_M(M, map_node_id_to_index, b, phi, e)
+                tm+=Integrate_M(M, map_node_id_to_index, b, phi, e)
 
             for phi in Ba_e:
-                Integrate_M(M, map_node_id_to_index, b, phi, e)
-                Integrate_M(M, map_node_id_to_index, phi, b, e)
+                tm+=Integrate_M(M, map_node_id_to_index, b, phi, e)
+                tm+=Integrate_M(M, map_node_id_to_index, phi, b, e)
 
+        # print("Element ", e.id, tm)
 
 
 def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
@@ -294,6 +298,8 @@ def fix_left_end(V):
         vert_ind +=1
 
     # to_fix = []
+    # print(to_fix)
+    # exit()
     P1 = np.delete(np.eye(V.shape[0]), to_fix, axis =1)
     P = np.kron(P1, np.eye(2))
     # print(np.matmul(P, P.T))

@@ -25,13 +25,16 @@ class Mesh:
         self.M = M
         self.W = sim.get_weighting_matrix(nonDupSize, sortedFlatB, map_nodes)
         self.invM = np.linalg.inv(M)
+        print("CHECK F=MA for grav")
+        print(self.invM.dot(self.f))
         self.K = K
-        # self.E_old = YoungsList
+        self.YM = None
         self.V = np.zeros((len(x)/2, 2))
         self.activeElems = activeElems
         self.sortedFlatB = sortedFlatB
         self.map_nodes = map_nodes
         self.nonDupSize = nonDupSize
+        self.simSteps = 0
 
         self.EmbeddingNodes = EmbeddingNodes
         self.EmbeddedMesh, self.EmbeddedTri = self.create_embedded_mesh()
@@ -51,7 +54,11 @@ class Mesh:
 
         return Emesh, Delaunay(Emesh).simplices
 
-    def reset(self):
+    def resetYM(self, Y):
+        self.YM= Y
+        sim.compute_stiffness(self.K, self.sortedFlatB, self.map_nodes, Youngs=self.YM)
+
+    def resetMesh(self):
         self.p = np.copy(self.x)
         self.v = np.zeros(len(self.p))
         self.X_to_V(self.V, self.p)
@@ -87,21 +94,23 @@ class Mesh:
                 # print("solved in ", i)
                 break
             if i == 10:
-                print("Error: not converging")
+                print("Newton Method Error: not converging NM_static")
                 exit()
         self.p = np.copy(p_g)
         self.X_to_V(self.V, self.p)
 
-    def step(self, h=1e-3):
+    def step(self, h=None):
         # invMhhK = np.linalg.inv(self.M - h*h*self.K)
         P = sim.fix_left_end(self.V)
         # print("Mass")
         # print(self.M)
-        for i in range (100):
+        for i in range (1000):
             self.p = self.p + h*np.matmul(P, P.T).dot(self.v)
             forces = self.f + self.K.dot(self.p - self.x)
-            self.v = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
-            # print("f", self.f)
+            self.v = self.v + h*P.dot(P.T.dot(self.invM.dot(forces)))
+            # print("")
+            # print("o", h*self.invM.dot(forces))
+            # print("f", h*P.dot(P.T.dot(self.invM.dot(forces))))
             # print("p", self.p)
             # print("v", self.v)
             # newv = np.copy(self.v)
@@ -115,12 +124,13 @@ class Mesh:
 
         self.X_to_V(self.V, self.p)
 
-    def new_verlet_step(self, h=1e-3):
+    def new_verlet_step(self, h=None):
         P = sim.fix_left_end(self.V)
 
         p_g = self.p + h*np.matmul(P, P.T).dot(self.v)
         forces = self.f + self.K.dot(p_g - self.x)
-        v_g = self.v + h*P.dot(np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces)))
+
+        v_g = self.v + h*P.dot(P.T.dot(self.invM.dot(forces)))
 
         # newv = np.copy(self.v)
         # func = lambda x: 0.5*np.dot(x.T, self.W.dot(x))
@@ -131,7 +141,7 @@ class Mesh:
         # res = scipy.optimize.minimize(func, newv, method="SLSQP", constraints=cons)
         return p_g, v_g
 
-    def new_nm_step(self, h=1e-3):
+    def new_nm_step(self, h=None):
         P = sim.fix_left_end(self.V)
         p_g = np.copy(self.p)
 
@@ -139,59 +149,59 @@ class Mesh:
         for i in range(NewtonMax):
             forces = self.f + self.K.dot(p_g - self.x)
 
-            g_block = P.T.dot(p_g) - P.T.dot(self.p) - h*P.T.dot(self.v) - h*h*np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))
-            grad_g_block =  np.matmul(np.matmul(P.T, np.identity(2*(self.nonDupSize))), P) - h*h*np.matmul(np.matmul(np.matmul(P.T, self.invM), P), np.matmul(np.matmul(P.T, self.K), P))
+            g_block = P.T.dot(p_g - self.p - h*self.v - h*h*self.invM.dot(forces))
+            grad_g_block =  np.matmul(P.T, np.matmul(np.identity(2*(self.nonDupSize)) - h*h*np.matmul(self.invM, self.K), P))
 
             Q,R = np.linalg.qr(grad_g_block)
             Qg = Q.T.dot(g_block)
             dp = -1*np.linalg.solve(R, Qg)
             p_g += P.dot(dp)
 
-            print("gblock norm")
-            print(np.linalg.norm(g_block))
-            print("")
+            # print("gblock norm")
+            # print(np.linalg.norm(g_block))
+            # print("")
             if (np.linalg.norm(g_block)/len(g_block)) < 1e-2:
-                print("solved in ", i)
+                # print("solved in ", i)
                 break
             if i == 10:
-                print("Error: not converging")
+                print("Newton Error: not converging, new_nm_step")
                 exit()
 
         v_g = (p_g - self.p)/h
         return p_g, v_g
 
 
-    def NMstep(self, h=1e-1):
+    def NMstep(self, h=None):
         P = sim.fix_left_end(self.V)
         p_g = np.copy(self.p)
 
-        for its in range(1):
-            NewtonMax = 100
-            for i in range(NewtonMax):
-                forces = self.f + self.K.dot(p_g - self.x)
 
-                # f_block = forces
-                # f_grad_block = np.matmul(np.matmul(P.T, self.K), P)
-                g_block = P.T.dot(p_g) - P.T.dot(self.p) - h*P.T.dot(self.v) - h*h*np.matmul(np.matmul(P.T, self.invM), P).dot(P.T.dot(forces))
-                grad_g_block =  np.matmul(np.matmul(P.T, np.identity(2*(self.nonDupSize))), P) - h*h*np.matmul(np.matmul(np.matmul(P.T, self.invM), P), np.matmul(np.matmul(P.T, self.K), P))
+        NewtonMax = 100
+        for i in range(NewtonMax):
+            forces = self.f + self.K.dot(p_g - self.x)
 
-                Q,R = np.linalg.qr(grad_g_block)
-                Qg = Q.T.dot(g_block)
-                dp = -1*np.linalg.solve(R, Qg)
-                p_g += P.dot(dp)
+            # f_block = forces
+            # f_grad_block = np.matmul(np.matmul(P.T, self.K), P)
+            g_block = P.T.dot(p_g - self.p - h*self.v - h*h*self.invM.dot(forces))
+            grad_g_block =  np.matmul(P.T, np.matmul(np.identity(2*(self.nonDupSize)) - h*h*np.matmul(self.invM, self.K), P))
 
-                print("gblock norm")
-                print(np.linalg.norm(g_block))
-                print("")
-                if (np.linalg.norm(g_block)/len(g_block)) < 1e-2:
-                    print("solved in ", i)
-                    break
-                if i == 10:
-                    print("Error: not converging")
-                    exit()
+            Q,R = np.linalg.qr(grad_g_block)
+            Qg = Q.T.dot(g_block)
+            dp = -1*np.linalg.solve(R, Qg)
+            p_g += P.dot(dp)
 
-            self.v = (p_g - self.p)/h
-            self.p = np.copy(p_g)
+            # print("gblock norm")
+            # print(np.linalg.norm(g_block))
+            # print("")
+            if (np.linalg.norm(g_block)/len(g_block)) < 1e-2:
+                # print("solved in ", i)
+                break
+            if i == 10:
+                print("Error: not converging, NMstep")
+                exit()
+
+        self.v = (p_g - self.p)/h
+        self.p = np.copy(p_g)
         self.X_to_V(self.V, self.p)
 
 
@@ -244,7 +254,7 @@ def get_reference_points(meshRef, meshH):
 
 def get_mesh_from_displacement(actNodes, EmbeddingNodes):
     sortedFlatB = sorted([i for sublist in actNodes for i in sublist], key=lambda x:x.id)
-    map_nodes_old = sim.create_active_nodes_index_map(sortedFlatB)
+    # # # map_nodes_old = sim.create_active_nodes_index_map(sortedFlatB)
     nonDuplicateSize, map_nodes, map_points_to_bases = sim.remove_duplicate_nodes_map(actNodes)
 
     # print("non duplicate size")
@@ -263,6 +273,8 @@ def get_mesh_from_displacement(actNodes, EmbeddingNodes):
     sim.compute_gravity(f_L, M_L, sortedFlatB, map_nodes, axis=0)
     sim.set_x_initially(x_L, sortedFlatB, map_nodes)
 
+
+
     # exit()
     # M_L += 1*np.identity(2*nonDuplicateSize)
     print("M is SPD ", utils.is_sym_pos_def(M_L))
@@ -273,24 +285,27 @@ def get_mesh_from_displacement(actNodes, EmbeddingNodes):
         E |= n.in_elements
 
     mesh = Mesh(x_L, v_L, f_L, M_L, K_L, E, sortedFlatB, map_nodes, nonDuplicateSize, EmbeddingNodes)
+
+    YM = np.empty(len(mesh.activeElems))
+    YM.fill(GV.Global_Youngs)
+    mesh.YM = YM
+
     return mesh
 
-def display_mesh(mesh, Ek=None):
+def display_mesh(mesh):
     viewer = igl.viewer.Viewer()
-    time = 0
 
-    sim.compute_stiffness(mesh.K, mesh.sortedFlatB, mesh.map_nodes, Youngs=Ek)
-    mesh.reset()
     # mesh.NM_static()
     def key_down(viewer):
-        mesh.step()
+        # if(mesh.simSteps<=4):
+        mesh.step(h=1e-4)
         # mesh.NMstep()
-
         Emesh = mesh.get_embedded_mesh()
         viewer.data.clear()
         V1 = igl.eigen.MatrixXd(Emesh)
         F1 = igl.eigen.MatrixXi(mesh.EmbeddedTri)
         viewer.data.set_mesh(V1, F1)
+        mesh.simSteps +=1
         return True
 
     key_down(viewer)
@@ -300,21 +315,23 @@ def display_mesh(mesh, Ek=None):
 
 
 
-def solve(meshL, meshH, E_0=None):
+def solve(meshL, meshH):
     print("Youngs Solve")
 
-    bnds = ((0, None) for i in range(len(E_0)))
-    timestep = 1e-1
+    bnds = ((0, None) for i in range(len(meshH.YM)))
+    timestep = 1e-3
 
     print("Ek")
-    print(E_0)
+    # E_0 = meshH.YM[0]
+    # print(E_0)
+    # print("before solve", id(meshH.K))
 
     # print(meshH.activeElems)
     def func(E_k):
         #v_squiggle(E_squiggle, F_squiggle)
-        # print("why is this running")
-        # print(E_k)
-        sim.compute_stiffness(meshH.K, meshH.sortedFlatB, meshH.map_nodes, Youngs=E_k)
+        print("why is this running")
+        print(E_k)
+        meshH.resetYM(E_k)
 
         # p_squiggle, v_squiggle = meshH.new_verlet_step(h=timestep)
         p_squiggle, v_squiggle = meshH.new_nm_step(h=timestep)
@@ -335,38 +352,42 @@ def solve(meshL, meshH, E_0=None):
 
         no = t1+t2+t3+t4
         print("     no",no, "t1 ",t1, "t2 ",t2, "t3 ",t3, "t4 ",t4)
-        # print("fine_e", meshL.E_old)
-        # print("coarse_e", meshH.E_old)
         print(E_k)
         return np.fabs(no)
 
-    res = minimize(func, E_0, method='CG', tol=1e-2, options={'disp': True})
-    sim.compute_stiffness(meshH.K, meshH.sortedFlatB, meshH.map_nodes, Youngs=res.x)
-    # print("result")
+    res = minimize(func, meshH.YM, method='BFGS', options={'disp': True})
+    meshH.resetYM(res.x)
+    print("RESULT")
     print(res)
+    print(meshH.YM)
+    # print("after solve", id(meshH.K))
     # print(meshH.K)
     return res.x
 
     # sim.compute_stiffness(meshH.K, meshH.sortedFlatB, meshH.map_nodes, Youngs=E_0)
     # return 0
 
-def new_display_mesh(meshL, meshH, Ek=None):
+def new_display_mesh(meshL, meshH):
     viewer = igl.viewer.Viewer()
-    time = 0
-    # meshH.step()
-    Ek = solve(meshL, meshH, E_0=Ek)
-    print(Ek)
+    # if(meshH.YM != None):
+        # solve(meshL, meshH)
     def key_down(viewer):
-        # meshH.NMstep()
-        meshH.step()
+        # if(meshH.simSteps<=5):
+        # meshH.NMstep(h=1e-2)
+        # if(meshH.YM != None):
+        #     solve(meshL, meshH)
+        meshH.NMstep(h=1e-1)
         # print(meshH.K)
-        # print(meshH.p)
-        # print(meshH.v)
-        Emesh = meshH.get_embedded_mesh()
+        # print("u", meshH.p - meshH.x)
+        # print("v",meshH.v)
+        # print("f",meshH.f)
+        # Emesh = meshH.get_embedded_mesh()
         viewer.data.clear()
-        V1 = igl.eigen.MatrixXd(Emesh)
-        F1 = igl.eigen.MatrixXi(meshH.EmbeddedTri)
+        V1 = igl.eigen.MatrixXd(meshH.V)
+        F1 = igl.eigen.MatrixXi(meshH.tri)
         viewer.data.set_mesh(V1, F1)
+        meshH.simSteps+=1
+
         return True
 
     key_down(viewer)
@@ -376,7 +397,6 @@ def new_display_mesh(meshL, meshH, Ek=None):
 
 
 def set_up_solver(fineLevel=2):
-
     hMesh = sim.get_hierarchical_mesh(dom)
 
     # FOR L3 MESH
@@ -385,7 +405,12 @@ def set_up_solver(fineLevel=2):
     actNodes_L = sim.get_active_nodes([hMesh[fineLevel]], dom, u_f=u_f_L)
     mesh_L = get_mesh_from_displacement(actNodes_L, EmbeddingNodes=[n for n in hMesh[fineLevel].nodes])
     eigvals, eigvecs = utils.general_eig_solve(mesh_L.K, mesh_L.M)
-    # display_mesh(mesh_L)
+    display_mesh(mesh_L)
+    # mesh_L.v[0] =1
+    # for i in range(100):
+    #     mesh_L.NMstep()
+    # print(mesh_L.p)
+    # print(mesh_L.v)
 
 
     #FOR H MESH
@@ -395,42 +420,34 @@ def set_up_solver(fineLevel=2):
     n2 = l1_e[1]
     n3 = l1_e[2]
     n4 = l1_e[3]
-    u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u[1][1] = 2
     # u = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
     # u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
 
-    sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,4], mesh_L.map_nodes)
-    actNodes_H = sim.get_active_nodes(hMesh, dom, tolerance=5e-3, u_f=u)
+    # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,4], mesh_L.map_nodes)
+    actNodes_H = sim.get_active_nodes([hMesh[fineLevel]], dom, tolerance=5e-3, u_f=u)
     mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[fineLevel].nodes])
-    print("Afterwards")
     print(mesh_H.sortedFlatB)
-    E_0 = np.empty(len(mesh_H.activeElems))
-    E_0.fill(GV.Global_Youngs)
+    # exit()
+    # E_0 = np.empty(len(mesh_H.activeElems))
+    # E_0.fill(GV.Global_Youngs)
     # E_0 =  np.array([133976.09, 142732.94, 83519.35, 94675.98, 90789.00, 120582.21, 40378.85, 50402.73, 86073.33, 105846.86, 120927.38, 78347.65, 147223.67, 80322.28, 84096.08, 106055.73, 109612.69,
     #    92483.46, 144294.45, 75641.41, 55946.07, 155050.56, 133797.53, 112925.10, 93251.21, 77559.87, 111344.65])
-
-
     # E_0.fill(3e5)
-    # K_0 = np.zeros((2*mesh_H.nonDupSize, 2*mesh_H.nonDupSize))
-    # sim.compute_stiffness(K_0, )
-    # print(E_0)
-    # Ek = solve(mesh_L, mesh_H, E_0=E_0)
-    # print(mesh_H.p)
-    # print(mesh_H.v)
-    # print(mesh_H.f)
-    # print("MESH SOLVED")
-    # print(Ek)
-    # print(mesh_H.p)
-    # print(mesh_H.v)
-    # print(mesh_H.f)
-    # tot = 0
-    # for i in range(mesh_H.M.shape[0]):
-    #     tot +=sum(mesh_H.M[i])
-    # print(tot)
+
+    # print("Afterwards")
+    # print("Original", id(mesh_H.K))
     # display_mesh(mesh_H) #dont run because it screws up the velocities used in the E_t+1 solver
-    new_display_mesh(mesh_L, mesh_H, E_0)
+    # new_display_mesh(mesh_L, mesh_H)
+    # print(mesh_H.K)
+    # t = 0
+    # for i in range(mesh_H.M.shape[0]):
+    #     print(sum(mesh_H.M[i]))
+    # # print("id", id(mesh_H.K))
+    # print("grav acceleration")
+    # print(np.linalg.inv(mesh_H.M).dot(mesh_H.f))
 
     # return mesh_L, mesh_H
 
