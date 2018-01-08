@@ -32,10 +32,17 @@ class Mesh:
         self.YM = None
         self.V = np.zeros((len(x)/2, 2))
         self.activeElems = activeElems
+
+
         self.sortedFlatB = sortedFlatB
         self.map_nodes = map_nodes
         self.nonDupSize = nonDupSize
         self.simSteps = 0
+
+        E_0 = np.empty(len(activeElems))
+        E_0.fill(1)
+        self.K_no_E = np.zeros((2*nonDupSize, 2*nonDupSize))
+        sim.compute_stiffness(self.K_no_E, self.sortedFlatB, self.map_nodes, Youngs=E_0)
 
         self.EmbeddingNodes = EmbeddingNodes
         self.EmbeddedMesh, self.EmbeddedTri = self.create_embedded_mesh()
@@ -108,7 +115,6 @@ class Mesh:
         for i in range (100):
             self.p = self.p + h*P.dot(P.T.dot(self.v))
             forces = self.f + self.K.dot(self.p - self.x)
-            print(P.shape)
             self.v = self.v + h*P.dot(P.T.dot(np.matmul(self.invM, P).dot(P.T.dot(forces))))
             # print("")
             # print("o", h*self.invM.dot(forces))
@@ -294,24 +300,69 @@ def get_mesh_from_displacement(actNodes, EmbeddingNodes):
 
 def solve(meshL, meshH):
     print("Old Solve")
-    timestep = 1e-2
+    timestep = 1e-1
 
     meshL.NMstep(h=timestep)
-    def func(Ek):
-        meshH.resetYM(Ek)
-        p_squiggle, v_squiggle = meshH.new_nm_step(h=timestep)
-        v_proj = meshH.Nc.T.dot(meshL.v)
+    v_squiggle = meshH.Nc.T.dot(meshL.v)
+    p_squiggle = meshH.p + timestep*v_squiggle
+    u_squiggle = p_squiggle - meshH.x
 
-        #norm projected velocities
-        no = np.linalg.norm(v_squiggle - v_proj)
-        print("     no:", no)
-        return no
+    bnds = ((0, None) for i in range(len(meshH.YM)))
+    timestep = 1e-3
 
-    res = minimize(func, meshH.YM, method='COBYLA', options={'disp': True})
+    def func(E_k):
+        #v_squiggle(E_squiggle, F_squiggle)
+        meshH.resetYM(E_k)
 
+        #Term 1: 0.5*v~^T* N^T*M*N *v~
+        t1 = 0.5*np.dot(v_squiggle,np.matmul(np.matmul(meshH.Nc.T, meshL.M), meshH.Nc).dot(v_squiggle))
+
+        #Term 2: v~^T * N^T*M*N * v~old
+        t2 = -1*np.dot(v_squiggle,np.matmul(np.matmul(meshH.Nc.T, meshL.M), meshH.Nc).dot(meshH.v))
+
+        #Term 3: 0.5 u~^T * N^T*K*N * u~ #Energy
+        # print(v_squiggle)
+        t3 = 0.5*np.dot(u_squiggle, np.matmul(np.matmul(meshH.Nc.T, meshL.K), meshH.Nc).dot(u_squiggle))
+
+        #Term 4: -h* N^T*Fext*v~
+        t4 = -1*timestep*np.dot(meshH.Nc.T.dot(meshL.f), v_squiggle)
+
+        no = t1+t2+t3+t4
+        print("     no",no, "t1 ",t1, "t2 ",t2, "t3 ",t3, "t4 ",t4)
+        print(E_k)
+        return np.fabs(no)
+
+    def func_der(x):
+        J = nd.Gradient(func)(x)
+        print(">>>>>grad", J, x)
+        return J.ravel()
+
+    res = minimize(func, meshH.YM, method='Nelder-Mead', options={'disp': True})
     meshH.resetYM(res.x)
     print("RESULT")
     print(res)
+    return res.x
+
+    # def func(Ek):
+    #     meshH.resetYM(Ek)
+    #     p_squiggle, v_squiggle = meshH.new_nm_step(h=timestep)
+    #     v_proj = meshH.Nc.T.dot(meshL.v)
+    #
+    #     #norm projected velocities
+    #     no = np.linalg.norm(v_squiggle - v_proj)
+    #     print("     no:", no)
+    #     return no
+    #
+    # def func_der(x):
+    #     J = nd.Gradient(func)(x)
+    #     # print(">>>>>grad", J, x)
+    #     return J.ravel()
+    #
+    # res = minimize(func, meshH.YM, method='CG', jac=func_der, options={'disp': True})
+    #
+    # meshH.resetYM(res.x)
+    # print("RESULT")
+    # print(res)
 
 
 def display_mesh(meshH, meshL=None):
@@ -323,7 +374,11 @@ def display_mesh(meshH, meshL=None):
 
     def key_down(viewer):
         # meshH.NMstep(h=1e-1)
-        meshH.step(h=1e-2)
+        # if(meshL!=None):
+        #     solve(meshL, meshH)
+
+        meshH.step(h=1e-3)
+
         Emesh = meshH.get_embedded_mesh()
         viewer.data.clear()
         V1 = igl.eigen.MatrixXd(Emesh)
@@ -344,16 +399,8 @@ def new_solve(meshL, meshH):
     bnds = ((0, None) for i in range(len(meshH.YM)))
     timestep = 1e-3
 
-    print("Ek")
-    # E_0 = meshH.YM[0]
-    # print(E_0)
-    # print("before solve", id(meshH.K))
-
-    # print(meshH.activeElems)
     def func(E_k):
         #v_squiggle(E_squiggle, F_squiggle)
-        # print("why is this running")
-        # print(E_k)
         meshH.resetYM(E_k)
 
         # p_squiggle, v_squiggle = meshH.new_verlet_step(h=timestep)
@@ -470,8 +517,8 @@ def set_up_solver(fineLevel=2):
 
 
 
-
-    # display_mesh(mesh_H, mesh_L) #dont run because it screws up the velocities used in the E_t+1 solver
+    # display_mesh(mesh_H)
+    display_mesh(mesh_H, mesh_L) #dont run because it screws up the velocities used in the E_t+1 solver
     # new_display_mesh(mesh_H, mesh_L)
     # print(mesh_H.K)
     # t = 0
