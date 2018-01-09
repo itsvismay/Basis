@@ -14,7 +14,7 @@ np.set_printoptions(threshold="nan", linewidth=190, precision=8, formatter={'all
 
 
 
-dom = ((0,0), (9, 9))
+dom = ((0,0), (2, 2))
 
 class Mesh:
 
@@ -152,10 +152,11 @@ class Mesh:
     def new_nm_step(self, h=None):
         P = sim.fix_left_end(self.V)
         p_g = np.copy(self.p)
+        rayleigh = -0
 
         NewtonMax = 100
         for i in range(NewtonMax):
-            forces = self.f + self.K.dot(p_g - self.x)
+            forces = self.f + self.K.dot(p_g - self.x) + (rayleigh/h)*self.K.dot(p_g - self.p)
 
             g_block = P.T.dot(p_g - self.p - h*self.v - h*h*self.invM.dot(forces))
             grad_g_block =  np.matmul(P.T, np.matmul(np.identity(2*(self.nonDupSize)) - h*h*np.matmul(self.invM, self.K), P))
@@ -181,11 +182,11 @@ class Mesh:
     def NMstep(self, h=None):
         P = sim.fix_left_end(self.V)
         p_g = np.copy(self.p)
-
+        rayleigh = -0
 
         NewtonMax = 100
         for i in range(NewtonMax):
-            forces = self.f + self.K.dot(p_g - self.x)
+            forces = self.f + self.K.dot(p_g - self.x) + (rayleigh/h)*self.K.dot(p_g - self.p)
 
             # f_block = forces
             # f_grad_block = np.matmul(np.matmul(P.T, self.K), P)
@@ -276,7 +277,7 @@ def get_mesh_from_displacement(actNodes, EmbeddingNodes):
 
     sim.compute_mass(M_L, sortedFlatB, map_nodes)
     sim.compute_stiffness(K_L, sortedFlatB, map_nodes)
-    sim.compute_gravity(f_L, M_L, sortedFlatB, map_nodes, axis=0)
+    sim.compute_gravity(f_L, M_L, sortedFlatB, map_nodes, axis=1)
     sim.set_x_initially(x_L, sortedFlatB, map_nodes)
 
 
@@ -302,13 +303,12 @@ def solve(meshL, meshH):
     print("Old Solve")
     timestep = 1e-1
 
-    meshL.NMstep(h=timestep)
-    v_squiggle = meshH.Nc.T.dot(meshL.v)
+    P = sim.fix_left_end(meshH.V)
+    meshL.NMstep(h=1e-1)
+
+    v_squiggle = P.dot(P.T.dot(meshH.Nc.T.dot(meshL.v)))
     p_squiggle = meshH.p + timestep*v_squiggle
     u_squiggle = p_squiggle - meshH.x
-
-    bnds = ((0, None) for i in range(len(meshH.YM)))
-    timestep = 1e-3
 
     def func(E_k):
         #v_squiggle(E_squiggle, F_squiggle)
@@ -322,23 +322,26 @@ def solve(meshL, meshH):
 
         #Term 3: 0.5 u~^T * N^T*K*N * u~ #Energy
         # print(v_squiggle)
-        t3 = 0.5*np.dot(u_squiggle, np.matmul(np.matmul(meshH.Nc.T, meshL.K), meshH.Nc).dot(u_squiggle))
+        t3 = 0.5*np.dot(u_squiggle, meshH.K.dot(u_squiggle))
 
         #Term 4: -h* N^T*Fext*v~
         t4 = -1*timestep*np.dot(meshH.Nc.T.dot(meshL.f), v_squiggle)
 
         no = t1+t2+t3+t4
-        print("     no",no, "t1 ",t1, "t2 ",t2, "t3 ",t3, "t4 ",t4)
-        print(E_k)
+        # print("     no",no, "t1 ",t1, "t2 ",t2, "t3 ",t3, "t4 ",t4)
+        # print(E_k)
         return np.fabs(no)
 
     def func_der(x):
         J = nd.Gradient(func)(x)
-        print(">>>>>grad", J, x)
+        # print(">>>>>grad", J, x)
         return J.ravel()
 
     res = minimize(func, meshH.YM, method='Nelder-Mead', options={'disp': True})
     meshH.resetYM(res.x)
+    meshH.v = v_squiggle
+    meshH.p = p_squiggle
+    meshH.X_to_V(meshH.V, meshH.p)
     print("RESULT")
     print(res)
     return res.x
@@ -368,16 +371,24 @@ def solve(meshL, meshH):
 def display_mesh(meshH, meshL=None):
     viewer = igl.viewer.Viewer()
 
-    if(meshL!=None):
-        meshL.resetMesh()
-        solve(meshL, meshH)
+    # if(meshL!=None):
+    #     meshL.resetMesh()
+    #     solve(meshL, meshH)
+
 
     def key_down(viewer):
         # meshH.NMstep(h=1e-1)
-        # if(meshL!=None):
+        # if(meshL!=None and meshH.simSteps<=10000):
         #     solve(meshL, meshH)
 
-        meshH.step(h=1e-3)
+        # P = sim.fix_left_end(meshH.V)
+        meshH.NMstep(h=1e-1)
+        #
+        # meshH.v = P.dot(P.T.dot(meshH.Nc.T.dot(meshL.v)))
+        # meshH.p = meshH.p + 1e-1*meshH.v
+        # meshH.X_to_V(meshH.V, meshH.p)
+        # print(meshH.v)
+        # print(meshH.p)
 
         Emesh = meshH.get_embedded_mesh()
         viewer.data.clear()
@@ -470,7 +481,7 @@ def new_display_mesh(meshH, meshL):
     viewer.callback_post_draw = key_down
     viewer.launch()
 
-def set_up_solver(fineLevel=2):
+def set_up_solver(fineLevel=1):
     hMesh = sim.get_hierarchical_mesh(dom)
 
     # FOR L3 MESH
@@ -489,21 +500,21 @@ def set_up_solver(fineLevel=2):
 
     #FOR H MESH
     print("H Mesh")
-    l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
-    n1 = l1_e[0]
-    n2 = l1_e[1]
-    n3 = l1_e[2]
-    n4 = l1_e[3]
-    # u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u[1][1] = 2
-    # u = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-
-    # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,4], mesh_L.map_nodes)
-    actNodes_H = sim.get_active_nodes([hMesh[1]], dom, tolerance=5e-3, u_f=u)
-    mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[fineLevel].nodes])
-    print(mesh_H.sortedFlatB)
+    # l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
+    # n1 = l1_e[0]
+    # n2 = l1_e[1]
+    # n3 = l1_e[2]
+    # n4 = l1_e[3]
+    # # u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # # u[1][1] = 2
+    # # u = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    # # u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    #
+    # # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,4], mesh_L.map_nodes)
+    # actNodes_H = sim.get_active_nodes([hMesh[1]], dom, tolerance=5e-3, u_f=u)
+    # mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[fineLevel].nodes])
+    # print(mesh_H.sortedFlatB)
 
     # exit()
     # E_0 = np.empty(len(mesh_H.activeElems))
@@ -518,7 +529,7 @@ def set_up_solver(fineLevel=2):
 
 
     # display_mesh(mesh_H)
-    display_mesh(mesh_H, mesh_L) #dont run because it screws up the velocities used in the E_t+1 solver
+    # display_mesh(mesh_H, mesh_L) #dont run because it screws up the velocities used in the E_t+1 solver
     # new_display_mesh(mesh_H, mesh_L)
     # print(mesh_H.K)
     # t = 0

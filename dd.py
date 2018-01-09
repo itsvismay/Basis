@@ -24,6 +24,7 @@ class Node:
         self.level = l #hierarchy level
         self.in_elements = set()  #this node is contained in elements
         self.basis = [[0 for i in range(Level.domain[1][0]) ] for j in range(Level.domain[1][0])]
+        self.basis_functions = []
         self.support_points = [[0 for i in range(Level.domain[1][0]) ] for j in range(Level.domain[1][0])]
         self.id = Node.number
         self.mass = 0
@@ -33,7 +34,7 @@ class Node:
     def __str__(self):
         return str(self.id)+" "+str(self.point)
     def __repr__(self):
-        return str(self.id)
+        return str(self.id)+", "+str(self.point)
 
     #Functions
     @staticmethod
@@ -55,13 +56,10 @@ class Node:
                 return False
 
         def shape_with(n2, n3):
+            #Creates basis function and adds it to basis_functions list
             n1 = np.array([self.point[0], self.point[1], 1]) #Set the z coord of self to be 1
             normal = np.cross((n1 - n2), (n1 - n3))
-            # print("in shape_with")
-            # print(self.point)
-            # print(n1)
-            # print(n2)
-            # print(n3)
+
             for x in range(Level.domain[1][0]):
                 for y in range(Level.domain[1][1]):
                     if(point_in_element(np.array([x,y, 0]), self.point, n2, n3)):
@@ -101,7 +99,7 @@ class Element:
     def __str__(self):
         return "str elem: "+str(self.id)+", "+str(self.n1)+" "+str(self.n2)+"  "+str(self.n3)
     def __repr__(self):
-        return "repr: "+str(self.id)+", nodes "+str(self.n1.id)+" "+str(self.n2.id)+" "+str(self.n3.id)
+            return "repr: "+str(self.id)+",\n    nodes "+str(self.n1)+"\n   "+str(self.n2)+"\n      "+str(self.n3)+"\n"
 
     #Functions
     @staticmethod
@@ -169,8 +167,7 @@ class Element:
 
         refined_elements = set()
 
-        #Check if midpoint node exists between any edge
-        #(prevents re-creation of node with same location at given hierarchy level)
+        #(try-excepts prevents re-creation of node with same location at given hierarchy level)
 
         #Get the three nodes for the outside triangle first
         try:
@@ -189,11 +186,12 @@ class Element:
             pn3 = Node(self.n3.point[0], self.n3.point[1], self.level+1)
             nodedict[self.n3.id] = pn3
 
+        #Check if midpoint node exists between any edge
         #Get the midpoint nodes
         try:
             pn1n2 = nodedict[(self.n1.id, self.n2.id)]
         except:
-            n1n2 = self.n1.point + (self.n2.point - self.n1.point)/2
+            n1n2 = self.n1.point + (self.n2.point - self.n1.point)/2.0
             pn1n2 = Node(n1n2[0], n1n2[1], self.level+1)
             nodedict[(self.n1.id, self.n2.id)] = pn1n2
             nodedict[(self.n2.id, self.n1.id)] = pn1n2
@@ -201,7 +199,7 @@ class Element:
         try:
             pn2n3 = nodedict[(self.n2.id, self.n3.id)]
         except:
-            n2n3 = self.n2.point + (self.n3.point - self.n2.point)/2
+            n2n3 = self.n2.point + (self.n3.point - self.n2.point)/2.0
             pn2n3 = Node(n2n3[0], n2n3[1], self.level+1)
             nodedict[(self.n2.id, self.n3.id)] = pn2n3
             nodedict[(self.n3.id, self.n2.id)] = pn2n3
@@ -209,7 +207,7 @@ class Element:
         try:
             pn1n3 = nodedict[(self.n1.id, self.n3.id)]
         except:
-            n1n3 = self.n1.point + (self.n3.point - self.n1.point)/2
+            n1n3 = self.n1.point + (self.n3.point - self.n1.point)/2.0
             pn1n3 = Node(n1n3[0], n1n3[1], self.level+1)
             nodedict[(self.n1.id, self.n3.id)] = pn1n3
             nodedict[(self.n3.id, self.n1.id)] = pn1n3
@@ -285,8 +283,8 @@ class Level:
         assert(e2 in self.elements)
 
         self.create_bases()
-        self.get_mass_matrix()
-        self.get_stiffness_matrix()
+        # self.get_mass_matrix()
+        # self.get_stiffness_matrix()
 
     def add_elements(self, elemts):
         #Input: a set of unique elements
@@ -446,12 +444,13 @@ class Level:
         #starts iterative split using dict (key = node1, key = node2) => val = in-between node
         for e in sorted(list(self.elements), key=lambda e: e.id):
             lk.add_elements(e.split(self.splitnodedict))
-
-
+        # print(self.elements)
+        # print("")
+        # print(lk.elements)
         lk.create_bases()
 
-        lk.get_mass_matrix()
-        lk.get_stiffness_matrix()
+        # lk.get_mass_matrix()
+        # lk.get_stiffness_matrix()
 
         return lk
 

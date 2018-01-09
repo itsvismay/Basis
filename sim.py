@@ -173,7 +173,6 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
 
     elem = 0
     E = sorted(list(E), key=lambda x:x.id)
-    print(E)
     for e in E:
         # print("Element ", e.id)
         Bs_e = sorted(list(Bs_(e)), key = lambda x: x.id)
@@ -268,9 +267,11 @@ def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
 def get_hierarchical_mesh(dom):
     l1 = ref.Level(dom)
     l2 = l1.split()
-    l3 = l2.split()
-    l4 = l3.split()
-    return [l1, l2, l3, l4]
+    # l3 = l2.split()
+    # l4 = l3.split()
+    # l5 = l4.split()
+    # return [l1, l2, l3, l4, l5]
+    return [l1, l2]
 
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001, u_f=None):
@@ -415,7 +416,7 @@ def start():
     #
     # print(K)
     # print(M)
-    print(f)
+    # print(f)
 
     # exit()
 
