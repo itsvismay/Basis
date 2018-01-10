@@ -34,10 +34,9 @@ def Ba_(e_a):
 def basis_supports_cell(b, cell):
     # print(b)
     # print(cell)
-    n1_under_b = b.support_points[cell.n1.point[0]][cell.n1.point[1]]
-    n2_under_b = b.support_points[cell.n2.point[0]][cell.n2.point[1]]
-    n3_under_b = b.support_points[cell.n3.point[0]][cell.n3.point[1]]
-    if(n1_under_b == 1 and n2_under_b == 1 and n3_under_b == 1):
+    center = cell.get_centroid()
+    v, cell_under_b = b.basis(center[0], center[1])
+    if(cell_under_b == True):
         return True
     else:
         return False
@@ -47,11 +46,10 @@ def slope_over_cell(b, e):
     # print(e)
     if not basis_supports_cell(b, e):
         return 0, 0
-
     #from here http://www.math.lsa.umich.edu/~glarose/classes/calcIII/web/13_5/planeeqn.html
-    n1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
-    n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
-    n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
+    n1 = np.array([e.n1.point[0], e.n1.point[1], b.basis(e.n1.point[0], e.n1.point[1])[0]])
+    n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis(e.n2.point[0], e.n2.point[1])[0]])
+    n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis(e.n3.point[0], e.n3.point[1])[0]])
     z_axis = np.array([0,0,1])
     normal = np.cross((n1 - n2), (n1 - n3))
     #Equations for plane
@@ -65,9 +63,9 @@ def slope_over_cell(b, e):
 
 #basis equation for b1 over element e
 def basis_value_over_e_at_xy(b, e, x, y):
-    n1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
-    n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
-    n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
+    n1 = np.array([e.n1.point[0], e.n1.point[1], b.basis(e.n1.point[0], e.n1.point[1])[0]])
+    n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis(e.n2.point[0], e.n2.point[1])[0]])
+    n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis(e.n3.point[0], e.n3.point[1])[0]])
     normal = np.cross((n1 - n2), (n1 - n3))
     # print(e)
     # print(normal)
@@ -87,7 +85,7 @@ def basis_value_over_e_at_xy(b, e, x, y):
 
 
 def AnotherQuadratureMethod(b1, b2, e):
-    DEPTH = 5
+    DEPTH = 3
     #Mentioned by Dave: Divide up the triangles into pieces,
     #and integrate using 1 point quadrature, multiply by area
     def break_up_triangle(p1, p2, p3, depth):
@@ -153,7 +151,12 @@ def Integrate_f(b, e):
 
 
 def get_local_B(b, e):
-    dB_dx, dB_dy = slope_over_cell(b, e)
+    if(e.id in b.slope_over_element):
+        (dB_dx, dB_dy) = b.slope_over_element[e.id]
+    else:
+        dB_dx, dB_dy = slope_over_cell(b, e)
+        b.slope_over_element[e.id] = (dB_dx, dB_dy)
+
     # print("slopes of ", b.id, "over ", e.id)
     # print(dB_dx, dB_dy)
     return np.matrix([[dB_dx, 0],
@@ -167,7 +170,10 @@ def compute_stiffness(K, B, map_node_id_to_index, Youngs=None):
     for n in B:
         E |= n.in_elements
 
-    if(Youngs==None):
+    if(Youngs is not None):
+        pass
+        # print("Youngs",)
+    else:
         Youngs = np.empty(len(E))
         Youngs.fill(GV.Global_Youngs)
 
@@ -264,14 +270,13 @@ def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
         elem+=1
 
 
-def get_hierarchical_mesh(dom):
+def get_hierarchical_mesh(dom, fineLevel):
+    layers = []
     l1 = ref.Level(dom)
-    l2 = l1.split()
-    # l3 = l2.split()
-    # l4 = l3.split()
-    # l5 = l4.split()
-    # return [l1, l2, l3, l4, l5]
-    return [l1, l2]
+    layers.append(l1)
+    for i in range(fineLevel):
+        layers.append(layers[i].split())
+    return  layers
 
 
 def get_active_nodes(hMesh, dom, tolerance = 0.0001, u_f=None):
@@ -338,11 +343,10 @@ def remove_duplicate_nodes_map(N):
 
 def set_desired_config(u_f, B, eigv, map_nodes):
     for b in B:
-        x_d = eigv[map_nodes[b.id]]
-        y_d = eigv[map_nodes[b.id]+1]
+        x_d = eigv[2*map_nodes[b.id]]
+        y_d = eigv[2*map_nodes[b.id]+1]
         #use += below so user can set multiple desired configs
-        u_f[int(b.point[0])][int(b.point[1])] += np.linalg.norm(np.array([x_d, y_d]))
-
+        u_f[map_nodes[b.id]] += np.linalg.norm(np.array([x_d, y_d]))
 
 
 def get_weighting_matrix(nonDupSize, B, map_node_to_ind):

@@ -14,7 +14,7 @@ np.set_printoptions(threshold="nan", linewidth=190, precision=8, formatter={'all
 
 
 
-dom = ((0,0), (2, 2))
+dom = ((0,0), (10, 5))
 
 class Mesh:
 
@@ -212,24 +212,6 @@ class Mesh:
         self.p = np.copy(p_g)
         self.X_to_V(self.V, self.p)
 
-    def get_grid_displacement_norms(self):
-        Vx = np.zeros((len(self.x)/2, 2))
-        self.X_to_V(Vx, self.x)
-        u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-        for i in range(len(Vx)):
-            u[int(Vx[i][0])][int(Vx[i][1])] = np.linalg.norm(Vx[i] - self.V[i])
-
-        return u
-
-    def get_grid_displacement(self):
-        Vx = np.zeros((len(self.x)/2, 2))
-        self.X_to_V(Vx, self.x)
-        d = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-        for i in range(len(Vx)):
-            d[int(Vx[i][0])][int(Vx[i][1])] = self.V[i]
-
-        return d
-
     def create_Nc_matrix(self):
         Nc = np.zeros((2*len(self.EmbeddingNodes), 2*self.nonDupSize)) # embedded x hierarch
         print("NC shape")
@@ -238,7 +220,7 @@ class Mesh:
         for a in sorted(self.EmbeddingNodes, key=lambda x:x.id):
             n_b_at_a = 0
             for b in self.sortedFlatB:
-                n_b_at_a = b.basis[a.point[0]][a.point[1]]
+                n_b_at_a, supports = b.basis(a.point[0], a.point[1])
                 Nc[2*i, 2*self.map_nodes[b.id]] += n_b_at_a
                 Nc[2*i+1, 2*self.map_nodes[b.id]+1] += n_b_at_a
             i+=1
@@ -382,7 +364,7 @@ def display_mesh(meshH, meshL=None):
         #     solve(meshL, meshH)
 
         # P = sim.fix_left_end(meshH.V)
-        meshH.NMstep(h=1e-1)
+        meshH.step(h=1e-3)
         #
         # meshH.v = P.dot(P.T.dot(meshH.Nc.T.dot(meshL.v)))
         # meshH.p = meshH.p + 1e-1*meshH.v
@@ -481,16 +463,19 @@ def new_display_mesh(meshH, meshL):
     viewer.callback_post_draw = key_down
     viewer.launch()
 
-def set_up_solver(fineLevel=1):
-    hMesh = sim.get_hierarchical_mesh(dom)
-
+def set_up_solver(fineLevel=3):
+    hMesh = sim.get_hierarchical_mesh(dom, fineLevel)
+    print(hMesh)
     # FOR L3 MESH
     print("L Mesh")
-    u_f_L = [[1 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
+    u_f_L = [1 for n in hMesh[fineLevel].nodes]
     actNodes_L = sim.get_active_nodes([hMesh[fineLevel]], dom, u_f=u_f_L)
-    mesh_L = get_mesh_from_displacement(actNodes_L, EmbeddingNodes=[n for n in hMesh[fineLevel].nodes])
+    mesh_L = get_mesh_from_displacement(actNodes_L, [n for n in hMesh[fineLevel].nodes])
     eigvals, eigvecs = utils.general_eig_solve(mesh_L.K, mesh_L.M)
-    display_mesh(mesh_L)
+    print("eigvects",eigvecs.shape)
+    # print(mesh_L.M)
+    # print(mesh_L.K)
+    # display_mesh(mesh_L)
     # mesh_L.v[0] =1
     # for i in range(100):
     #     mesh_L.NMstep()
@@ -500,21 +485,21 @@ def set_up_solver(fineLevel=1):
 
     #FOR H MESH
     print("H Mesh")
-    # l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
-    # n1 = l1_e[0]
-    # n2 = l1_e[1]
-    # n3 = l1_e[2]
-    # n4 = l1_e[3]
-    # # u = [[0 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # u = [[n1.basis[x][y]+n2.basis[x][y]+n3.basis[x][y]+n4.basis[x][y] for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # # u[1][1] = 2
-    # # u = [[x**2 + y**2 for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    # # u = [[np.sqrt(x**2 + y**2) for y in range(dom[0][1], dom[1][1])] for x in range(dom[0][0], dom[1][0])]
-    #
-    # # sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,4], mesh_L.map_nodes)
-    # actNodes_H = sim.get_active_nodes([hMesh[1]], dom, tolerance=5e-3, u_f=u)
-    # mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[fineLevel].nodes])
-    # print(mesh_H.sortedFlatB)
+    l1_e = sorted(list(hMesh[0].nodes), key=lambda x:x.id)
+    n1 = l1_e[0]
+    n2 = l1_e[1]
+    n3 = l1_e[2]
+    n4 = l1_e[3]
+    u = [1 for n in hMesh[fineLevel].nodes]
+    # u = [n1.basis(n.point[0], n.point[1])[0]  \
+    #     + n2.basis(n.point[0], n.point[1])[0] \
+    #     + n3.basis(n.point[0], n.point[1])[0] \
+    #     + n4.basis(n.point[0], n.point[1])[0] for n in hMesh[fineLevel].nodes]
+    # u[1][1] = 2
+    # print(u)
+    sim.set_desired_config(u, mesh_L.sortedFlatB, eigvecs[:,4], mesh_L.map_nodes)
+    actNodes_H = sim.get_active_nodes(hMesh, dom, tolerance=5e-3, u_f=u)
+    mesh_H = get_mesh_from_displacement(actNodes_H, [n for n in hMesh[fineLevel].nodes])
 
     # exit()
     # E_0 = np.empty(len(mesh_H.activeElems))
@@ -528,7 +513,7 @@ def set_up_solver(fineLevel=1):
 
 
 
-    # display_mesh(mesh_H)
+    display_mesh(mesh_H)
     # display_mesh(mesh_H, mesh_L) #dont run because it screws up the velocities used in the E_t+1 solver
     # new_display_mesh(mesh_H, mesh_L)
     # print(mesh_H.K)

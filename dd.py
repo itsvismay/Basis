@@ -23,12 +23,11 @@ class Node:
         self.point = np.array([x, y, 0]) #location
         self.level = l #hierarchy level
         self.in_elements = set()  #this node is contained in elements
-        self.basis = [[0 for i in range(Level.domain[1][0]) ] for j in range(Level.domain[1][0])]
         self.basis_functions = []
-        self.support_points = [[0 for i in range(Level.domain[1][0]) ] for j in range(Level.domain[1][0])]
         self.id = Node.number
         self.mass = 0
         self.active = False
+        self.slope_over_element={}
         Node.number+=1
 
     def __str__(self):
@@ -41,39 +40,74 @@ class Node:
     def getNumberOfNodes():
         return Node.number
 
-    def update_basis(self):
-        def point_in_element(q, n1, n2, n3):
-            p = q - n1
-            b = n2 - n1
-            c = n3 - n1
-            d = b[0]*c[1] - c[0]*b[1]
-            wa = 1.0*(p[0]*(b[1] - c[1]) + p[1]*(c[0] - b[0]) + d)/d
-            wb = 1.0*(p[0]*c[1] - p[1]*c[0])/d
-            wc = 1.0*(p[1]*b[0] - p[0]*b[1])/d
-            if(0<= wa and 0<=wb and 0<=wc and wa<=1 and wb<=1 and wc<=1):
-                return True
-            else:
-                return False
+    def point_in_element(self, q, n1, n2, n3):
+        p = q - n1
+        b = n2 - n1
+        c = n3 - n1
+        d = b[0]*c[1] - c[0]*b[1]
+        wa = 1.0*(p[0]*(b[1] - c[1]) + p[1]*(c[0] - b[0]) + d)/d
+        wb = 1.0*(p[0]*c[1] - p[1]*c[0])/d
+        wc = 1.0*(p[1]*b[0] - p[0]*b[1])/d
+        if(0<= wa and 0<=wb and 0<=wc and wa<=1 and wb<=1 and wc<=1):
+            return True
+        else:
+            return False
 
-        def shape_with(n2, n3):
+    def basis_embedded_onto_5x5_mesh_over_dom(self, fine_level):
+        #THIS NEEDS TO CHANGE TO A MESH EMBEDDING!!
+        b = []
+        for n in sorted(list(fine_level.nodes), key=lambda x:x.id):
+            # print(self)
+            # print(n)
+            r = self.basis(n.point[0], n.point[1])
+            # print("     ", r)
+            b.append(r[0])
+            # print("")
+        return b
+
+
+
+    def basis(self, x, y):
+        supports_point = False
+        for e in self.in_elements:
+            if(self.point_in_element(np.array([x, y, 0]), e.n1.point, e.n2.point, e.n3.point)):
+                supports_point = True
+
+        if not supports_point:
+            return 0, False
+
+        minvalue = 123456
+        for i in range(len(self.basis_functions)):
+            v, n1, normal = self.basis_functions[i](x, y)
+            # print("     ",v, normal, n1)
+            if(v<=minvalue):
+                minvalue = v
+
+        if(minvalue==123456):
+            return 0, True
+        else:
+            return minvalue, True
+
+
+    def update_basis(self):
+
+        def shape_with(n2, n3, eid):
             #Creates basis function and adds it to basis_functions list
             n1 = np.array([self.point[0], self.point[1], 1]) #Set the z coord of self to be 1
             normal = np.cross((n1 - n2), (n1 - n3))
-
-            for x in range(Level.domain[1][0]):
-                for y in range(Level.domain[1][1]):
-                    if(point_in_element(np.array([x,y, 0]), self.point, n2, n3)):
-                        self.basis[x][y] = -1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2]
-                        self.support_points[x][y] = 1
+            x_slope = -1.0*normal[0]/(normal[2])#/(2.0*e.get_area())
+            y_slope = -1.0*normal[1]/(normal[2])#/(2.0*e.get_area())
+            self.slope_over_element[eid] = (x_slope, y_slope)
+            self.basis_functions.append(lambda x,y,normal=normal,n1=n1: (-1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2], n1, normal))
 
 
         for e in self.in_elements:
             if self.id == e.n1.id:
-                shape_with(e.n2.point, e.n3.point)
+                shape_with(e.n2.point, e.n3.point, e.id)
             elif self.id == e.n2.id:
-                shape_with(e.n1.point, e.n3.point)
+                shape_with(e.n1.point, e.n3.point, e.id)
             else:
-                shape_with(e.n1.point, e.n2.point)
+                shape_with(e.n1.point, e.n2.point, e.id)
 
 class Element:
     #class vars
@@ -113,6 +147,11 @@ class Element:
     def reference_shape_matrix(self):
         return np.matrix([[self.n3.point[0] - self.n1.point[0], self.n2.point[0] - self.n1.point[0]], \
                             [self.n3.point[1] - self.n1.point[1], self.n2.point[1] - self.n1.point[1]]])
+
+    def get_centroid(self):
+        centroid_x = (self.n1.point[0] + self.n2.point[0] + self.n3.point[0])/3.0
+        centroid_y = (self.n1.point[1] + self.n2.point[1] + self.n3.point[1])/3.0
+        return np.array([centroid_x, centroid_y])
 
     def get_area(self):
         #Input: nothing
@@ -225,15 +264,6 @@ class Element:
         return refined_elements
 
 
-    # def quadrisect():
-    #     set intersection between nodes nx, ny
-    #     if another element exists, create quadrisection
-
-    # def create_basis(self):
-
-    #     if((self.n1.point - self.n2.point).dot(self.n1.point - self.n3.point) == 0):
-    #         #n1 is right anglehttps://mail.google.com/mail/u/0/#label/DGP/15f6ebcb8bcc860d
-    #         self.n1.basis[self.n1.point[0]][self.n1.point[1]] = 1
 
 class Level:
     #class vars
@@ -312,126 +342,85 @@ class Level:
         # self.elements
 
     #basis equation for b1 over element e
-    def basis_value_over_e_at_xy(self, b, e, x, y):
-        n1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
-        n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
-        n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
-        # n1 = np.array([e.n1.point[0], e.n1.point[1], 0])
-        # n2 = np.array([e.n2.point[0], e.n2.point[1], 0])
-        # n3 = np.array([e.n3.point[0], e.n3.point[1], 0])
-        normal = np.cross((n1 - n2), (n1 - n3))
-
-        # print(x,y)
-        z = -1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2]
-        # print(z)
-        return z
-
-
-    def GaussQuadrature_2d_3point(self, b, e):
-        # b.basis = [[1 for i in range(5)] for j in range(5)]
-
-        #as defined here http://people.maths.ox.ac.uk/parsons/Specification.pdf
-        #weights = [5.0/9.0, 8.0/9.0, 5.0/9.0]#, [8.0/9.0, 8.0/9.0, 8.0/9.0], [5.0/9.0, 8.0/9.0, 5.0/9.0]]
-        weights = [1.0, 1.0, 1.0]
-        #hard coded x, y points for the standard triangle
-        x_standard = [0.11270166537, 0.5, 0.88729833462]
-        y_standard = [[0.1, 0.44364916731, 0.78729833462], \
-                [0.05635083268 , 0.25, 0.44364916731],\
-                [0.01270166537 , 0.05635083268, 0.1]]
-
-        points_on_ref_tri = []
-
-        #Ref = F*Std
-        F = e.reference_shape_matrix()*np.linalg.inv(e.standardized_shape_matrix())
-        # print(e.standardized_shape_matrix())
-        # print(e.reference_shape_matrix())
-        # print("Hi")
-        # # print(F)
-        # # print(np.array([x_standard[1], y_standard[1][1]]))
-        # # print(F.dot(np.array([x_standard[1], y_standard[1][1]])))
-        tot = 0.0
-        for i in range(len(x_standard)):
-            for j in range(len(y_standard[i])):
-                print(x_standard[i], y_standard[i][j])
-                print(i,j)
-                p = F.dot(np.array([x_standard[i], y_standard[i][j]]))
-                tot += weights[i]*weights[j]*self.basis_value_over_e_at_xy(b, e, p[0,0], p[0,1])
-
-        print(np.linalg.det(F)*tot*(1.0/8)) # multiply by det(F) = new area/ old area
-        print(tot)
-        print(np.linalg.det(F), e.get_area())
-
-
-    def get_mass_matrix(self):
-        if(len(self.M) != 0):
-            return self.M
-
-        if(len(self.nodes) == 0):
-            print("You haven't created a basis yet")
-            return self.M
-
-        for e in self.elements:
-            centroid_x = (e.n1.point[0] + e.n2.point[0] + e.n3.point[0])/3.0
-            centroid_y = (e.n1.point[1] + e.n2.point[1] + e.n3.point[1])/3.0
-
-            # element_mass = 1*(e.get_area()*1)/3.0
-            e.n1.mass += e.get_area()*self.basis_value_over_e_at_xy(e.n1, e, centroid_x, centroid_y)*self.basis_value_over_e_at_xy(e.n1, e, centroid_x, centroid_y)
-            e.n2.mass += e.get_area()*self.basis_value_over_e_at_xy(e.n2, e, centroid_x, centroid_y)*self.basis_value_over_e_at_xy(e.n2, e, centroid_x, centroid_y)
-            e.n3.mass += e.get_area()*self.basis_value_over_e_at_xy(e.n3, e, centroid_x, centroid_y)*self.basis_value_over_e_at_xy(e.n3, e, centroid_x, centroid_y)
-
-        massVec = []
-        for n in sorted(list(self.nodes), key=lambda x:x.id):
-            # print(n.id)
-            massVec.append(n.mass)
-            massVec.append(n.mass)
-
-        self.M = np.diag(massVec)
-        return self.M
-
-
-
-
-    def get_stiffness_matrix(self):
-        #
-        #
-        #Use: Indexing the K matrix only works if its created before the level has been split!!
-        if(len(self.K) != 0):
-            return self.K
-
-        if(len(self.nodes) == 0):
-            print("You haven't created a basis yet")
-            return
-
-        self.K = np.zeros((2*len(self.nodes), 2*len(self.nodes))) #2*n because 2 dimensions
-        offset = Node.number - len(self.nodes)
-        for e in self.elements:
-            minNodeNum = Node.number - len(self.nodes) #re-indexes nodes to be min = 0 max = len(# nodes_in_level)
-            indices = [e.n1.id - minNodeNum,
-                        e.n2.id - minNodeNum,
-                        e.n3.id - minNodeNum]
-
-            local_k = e.compute_stiffness()
-            j = 0
-            for r in local_k:
-                dfxrdx1 = r.item(0)
-                dfxrdy1 = r.item(1)
-                dfxrdx2 = r.item(2)
-                dfxrdy2 = r.item(3)
-                dfxrdx3 = r.item(4)
-                dfxrdy3 = r.item(5)
-
-                kj = j%2
-                self.K[2*indices[j/2]+kj][2*indices[0]] += dfxrdx1
-                self.K[2*indices[j/2]+kj][2*indices[0]+1] += dfxrdy1
-
-                self.K[2*indices[j/2]+kj][2*indices[1]] += dfxrdx2
-                self.K[2*indices[j/2]+kj][2*indices[1]+1] += dfxrdy2
-
-                self.K[2*indices[j/2]+kj][2*indices[2]] += dfxrdx3
-                self.K[2*indices[j/2]+kj][2*indices[2]+1] += dfxrdy3
-                j+=1
-
-        return self.K
+    # def basis_value_over_e_at_xy(self, b, e, x, y):
+    #     n1 = np.array([e.n1.point[0], e.n1.point[1], b.basis[e.n1.point[0]][e.n1.point[1]]])
+    #     n2 = np.array([e.n2.point[0], e.n2.point[1], b.basis[e.n2.point[0]][e.n2.point[1]]])
+    #     n3 = np.array([e.n3.point[0], e.n3.point[1], b.basis[e.n3.point[0]][e.n3.point[1]]])
+    #     # n1 = np.array([e.n1.point[0], e.n1.point[1], 0])
+    #     # n2 = np.array([e.n2.point[0], e.n2.point[1], 0])
+    #     # n3 = np.array([e.n3.point[0], e.n3.point[1], 0])
+    #     normal = np.cross((n1 - n2), (n1 - n3))
+    #
+    #     # print(x,y)
+    #     z = -1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2]
+    #     # print(z)
+    #     return z
+    # def get_mass_matrix(self):
+    #     if(len(self.M) != 0):
+    #         return self.M
+    #
+    #     if(len(self.nodes) == 0):
+    #         print("You haven't created a basis yet")
+    #         return self.M
+    #
+    #     for e in self.elements:
+    #         centroid_x = (e.n1.point[0] + e.n2.point[0] + e.n3.point[0])/3.0
+    #         centroid_y = (e.n1.point[1] + e.n2.point[1] + e.n3.point[1])/3.0
+    #
+    #         # element_mass = 1*(e.get_area()*1)/3.0
+    #         e.n1.mass += e.get_area()*self.basis_value_over_e_at_xy(e.n1, e, centroid_x, centroid_y)*self.basis_value_over_e_at_xy(e.n1, e, centroid_x, centroid_y)
+    #         e.n2.mass += e.get_area()*self.basis_value_over_e_at_xy(e.n2, e, centroid_x, centroid_y)*self.basis_value_over_e_at_xy(e.n2, e, centroid_x, centroid_y)
+    #         e.n3.mass += e.get_area()*self.basis_value_over_e_at_xy(e.n3, e, centroid_x, centroid_y)*self.basis_value_over_e_at_xy(e.n3, e, centroid_x, centroid_y)
+    #
+    #     massVec = []
+    #     for n in sorted(list(self.nodes), key=lambda x:x.id):
+    #         # print(n.id)
+    #         massVec.append(n.mass)
+    #         massVec.append(n.mass)
+    #
+    #     self.M = np.diag(massVec)
+    #     return self.M
+    # def get_stiffness_matrix(self):
+    #     #
+    #     #
+    #     #Use: Indexing the K matrix only works if its created before the level has been split!!
+    #     if(len(self.K) != 0):
+    #         return self.K
+    #
+    #     if(len(self.nodes) == 0):
+    #         print("You haven't created a basis yet")
+    #         return
+    #
+    #     self.K = np.zeros((2*len(self.nodes), 2*len(self.nodes))) #2*n because 2 dimensions
+    #     offset = Node.number - len(self.nodes)
+    #     for e in self.elements:
+    #         minNodeNum = Node.number - len(self.nodes) #re-indexes nodes to be min = 0 max = len(# nodes_in_level)
+    #         indices = [e.n1.id - minNodeNum,
+    #                     e.n2.id - minNodeNum,
+    #                     e.n3.id - minNodeNum]
+    #
+    #         local_k = e.compute_stiffness()
+    #         j = 0
+    #         for r in local_k:
+    #             dfxrdx1 = r.item(0)
+    #             dfxrdy1 = r.item(1)
+    #             dfxrdx2 = r.item(2)
+    #             dfxrdy2 = r.item(3)
+    #             dfxrdx3 = r.item(4)
+    #             dfxrdy3 = r.item(5)
+    #
+    #             kj = j%2
+    #             self.K[2*indices[j/2]+kj][2*indices[0]] += dfxrdx1
+    #             self.K[2*indices[j/2]+kj][2*indices[0]+1] += dfxrdy1
+    #
+    #             self.K[2*indices[j/2]+kj][2*indices[1]] += dfxrdx2
+    #             self.K[2*indices[j/2]+kj][2*indices[1]+1] += dfxrdy2
+    #
+    #             self.K[2*indices[j/2]+kj][2*indices[2]] += dfxrdx3
+    #             self.K[2*indices[j/2]+kj][2*indices[2]+1] += dfxrdy3
+    #             j+=1
+    #
+    #     return self.K
 
 
     def split(self):
@@ -444,6 +433,7 @@ class Level:
         #starts iterative split using dict (key = node1, key = node2) => val = in-between node
         for e in sorted(list(self.elements), key=lambda e: e.id):
             lk.add_elements(e.split(self.splitnodedict))
+
         # print(self.elements)
         # print("")
         # print(lk.elements)
@@ -463,11 +453,13 @@ def solve(levels, u_f, toll):
     for l in levels:
         for n in sorted(list(l.nodes), key=lambda x:x.id):
             n.active = False
-            bases.append(np.ravel(n.basis))
+            bases.append(np.ravel(n.basis_embedded_onto_5x5_mesh_over_dom(levels[-1])))
             nodes.append(n)
 
-    N = np.transpose(np.matrix(bases)) # domain^2 x # of total nodes
-    u = np.ravel(u_f) #domain^2 x 1
+    N = np.transpose(np.matrix(bases)) # fine nodes x # of total nodes
+    print(N.shape)
+    u = np.ravel(u_f) #fine nodes x 1
+    print(len(u))
     c = np.array([1 for k in range(N.shape[1])])
     bds = np.array([(-20, None) for k in range(N.shape[1])])
     epsilon = np.array([toll for k in range(2*N.shape[0])])
