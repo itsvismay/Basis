@@ -2,26 +2,12 @@
 
 Todo list:
 
-0. Get the simulation to work with fixed points
-      - Create P matrix (done)
-      - Do dynamics based on the projection matrix (done)
+5. Time warp (mostly done, need to fix the rest first)
 
+6. Write the optimization in Dave's Matlab/GAUSS plugin
 
-1. Make sure the physics is right
-     - Implicit time integrator
-     - Embedded meshes (done)
-     - That weird optimization thing (done)
-     - Density seems off. hMesh[0] wiggles more than hMesh[2]
+7. Speed: Serializing layered and hierarchical meshes in python to save time.
 
-3. Test everything for linear modes
-    - Free fall sim (done)
-    - Fixed points sim (done)
+8. Get Gingerbread domain working
 
-4. Run the full Youngs solver
-    - Run on test, make sure it works
-    - Run on a modal basis (done)
-
-5. Time warp
-    - Talk to Dave
-
-6. Make the optimizer better
+9. Optimization in Python
