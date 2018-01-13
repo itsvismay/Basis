@@ -3,6 +3,7 @@ import scipy
 import sys, os
 sys.path.insert(0, os.getcwd()+"/../libigl/python/")
 import pyigl as igl
+import cPickle as pickle
 
 def dist(p1, p2):
     return np.linalg.norm(p1-p2)
@@ -70,7 +71,31 @@ def general_eig_solve(A, B):
 
     return eigvals, eigvecs
 
-def serialize_mesh(name, V, F):
+def mesh_to_obj(name, V, F):
     V3 = np.zeros((V.shape[0], V.shape[1]+1))
     V3[:,:-1] = V
     igl.writeOBJ(name, igl.eigen.MatrixXd(V3), igl.eigen.MatrixXi(F))
+
+def serialize_layers(name, hMesh):
+    pfile = open(name, 'wb')
+    pickle.dump(hMesh, pfile, protocol=pickle.HIGHEST_PROTOCOL)
+    pfile.close()
+    return 1
+
+def unserialize_layers(name):
+    pfile = open(name, 'rb')
+    layers = pickle.load(pfile)
+    pfile.close()
+    return layers
+
+def serialize_mesh(name, mesh):
+    pfile = open(name, 'wb')
+    pickle.dump(mesh, pfile, protocol=pickle.HIGHEST_PROTOCOL)
+    pfile.close()
+    return 1
+
+def unserialize_mesh(name):
+    pfile = open(name, 'rb')
+    mesh = pickle.load(pfile)
+    pfile.close()
+    return mesh

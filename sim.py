@@ -272,14 +272,14 @@ def compute_gravity(f, M, B, map_node_id_to_index, axis=1, mult=1):
 
 def get_hierarchical_mesh(dom, fineLevel):
     layers = []
-    l1 = ref.Level(dom)
+    l1 = ref.Level(d=dom)
     layers.append(l1)
     for i in range(fineLevel):
         layers.append(layers[i].split())
     return  layers
 
 
-def get_active_nodes(hMesh, dom, tolerance = 0.0001, u_f=None):
+def get_active_nodes(hMesh, dom=None, tolerance = 0.0001, u_f=None):
     if(u_f == None):
         print("ERROR: sim.py get_active_nodes")
         exit()

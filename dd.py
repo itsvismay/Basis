@@ -28,6 +28,7 @@ class Node:
         self.mass = 0
         self.active = False
         self.slope_over_element={}
+        self.basis_over_points={}
         Node.number+=1
 
     def __str__(self):
@@ -53,27 +54,31 @@ class Node:
         else:
             return False
 
-    def basis_embedded_onto_5x5_mesh_over_dom(self, fine_level):
-        #THIS NEEDS TO CHANGE TO A MESH EMBEDDING!!
+
+    def basis_embedded_onto_fine_mesh_domain(self, fine_level):
         b = []
         for n in sorted(list(fine_level.nodes), key=lambda x:x.id):
             # print(self)
             # print(n)
-            r = self.basis(n.point[0], n.point[1])
+            r = self.basis(n.point[0], n.point[1])[0]
             # print("     ", r)
-            b.append(r[0])
+            b.append(r)
             # print("")
         return b
 
 
 
     def basis(self, x, y):
+        if((round(x,2),round(y,2)) in self.basis_over_points):
+            return self.basis_over_points[(round(x, 2), round(y,2))]
+
         supports_point = False
         for e in self.in_elements:
             if(self.point_in_element(np.array([x, y, 0]), e.n1.point, e.n2.point, e.n3.point)):
                 supports_point = True
 
         if not supports_point:
+            self.basis_over_points[(round(x, 2), round(y,2))] = (0, False)
             return 0, False
 
         minvalue = 123456
@@ -84,13 +89,14 @@ class Node:
                 minvalue = v
 
         if(minvalue==123456):
+            self.basis_over_points[(round(x, 2), round(y,2))] = (0, True)
             return 0, True
         else:
+            self.basis_over_points[(round(x, 2), round(y,2))] = (minvalue, True)
             return minvalue, True
 
 
     def update_basis(self):
-
         def shape_with(n2, n3, eid):
             #Creates basis function and adds it to basis_functions list
             n1 = np.array([self.point[0], self.point[1], 1]) #Set the z coord of self to be 1
@@ -99,6 +105,10 @@ class Node:
             y_slope = -1.0*normal[1]/(normal[2])#/(2.0*e.get_area())
             self.slope_over_element[eid] = (x_slope, y_slope)
             self.basis_functions.append(lambda x,y,normal=normal,n1=n1: (-1.0*(normal[0]*(x-n1[0]) + normal[1]*(y-n1[1]))/normal[2] + n1[2], n1, normal))
+
+            self.basis_over_points[(round(n1[0],2), round(n1[1],2))] = (1, True)
+            self.basis_over_points[(round(n2[0],2), round(n2[1],2))] = (0, True)
+            self.basis_over_points[(round(n3[0],2), round(n3[1],2))] = (0, True)
 
 
         for e in self.in_elements:
@@ -270,7 +280,7 @@ class Level:
     number = 0
     domain = ((0, 0), (5, 5)) #default domain
 
-    def __init__(self, d = None):
+    def __init__(self, d=None, V=None, F=None):
         #Instance Vars
         self.elements = set()
         self.nodes = set()
@@ -279,16 +289,36 @@ class Level:
         self.M = []
         self.depth = Level.number
 
-        if d != None:
-            Level.domain = d
-
         if(Level.number == 0):
-            self.create_level_one()
+            if d != None:
+                Level.domain = d
+                self.create_default_level_one()
+            else:
+                self.create_gingerbread_level_one(V, F)
+
+
 
         Level.number +=1
 
+
     #Functions
-    def create_level_one(self):
+    def create_gingerbread_level_one(self, V, F):
+        if(V is None or F is None):
+            print("ERROR: Mesh is non - gingerbread_level_one")
+            exit()
+
+        n = []
+        for i in range(V.rows()):
+            n.append(Node(float(V.row(i)[0]), float(V.row(i)[1]), Level.number))
+
+        e = set()
+        for i in range(F.rows()):
+            e.add(Element(n[int(F.row(i)[0])], n[int(F.row(i)[1])], n[int(F.row(i)[2])], Level.number))
+
+        self.add_elements(e)
+        self.create_bases()
+
+    def create_default_level_one(self):
         #Input: nothing
         #Output: Nothing
         #Use: Creates Level 0, only level 0
@@ -448,18 +478,21 @@ class Level:
 from scipy.optimize import linprog
 from numpy.linalg import solve
 def solve(levels, u_f, toll):
+    print("gingerbread")
     bases = []
     nodes = []
     for l in levels:
         for n in sorted(list(l.nodes), key=lambda x:x.id):
+            print("gingerbread done", n, len(l.nodes), Node.number)
             n.active = False
-            bases.append(np.ravel(n.basis_embedded_onto_5x5_mesh_over_dom(levels[-1])))
+            r = n.basis_embedded_onto_fine_mesh_domain(levels[-1])
+            bases.append(r)
             nodes.append(n)
 
     N = np.transpose(np.matrix(bases)) # fine nodes x # of total nodes
-    print(N.shape)
+    print("Nshape", N.shape)
     u = np.ravel(u_f) #fine nodes x 1
-    print(len(u))
+    print("u",len(u))
     c = np.array([1 for k in range(N.shape[1])])
     bds = np.array([(-20, None) for k in range(N.shape[1])])
     epsilon = np.array([toll for k in range(2*N.shape[0])])
@@ -470,7 +503,7 @@ def solve(levels, u_f, toll):
     res = linprog(c, A_ub = bigN, b_ub = bigU, options={"disp": True})
 
     NodesUsedByLevel = [[] for l in range(Level.number)]
-
+    print(len(res.x), len(nodes))
     for i in range(0,len(res.x)):
         if (res.x[i]>1e-10):
             res.x[i] = 1

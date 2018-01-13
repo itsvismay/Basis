@@ -463,9 +463,10 @@ def new_display_mesh(meshH, meshL):
     viewer.callback_post_draw = key_down
     viewer.launch()
 
-def set_up_solver(fineLevel=3):
+
+
+def set_up_solver(fineLevel=2):
     hMesh = sim.get_hierarchical_mesh(dom, fineLevel)
-    print(hMesh)
     # FOR L3 MESH
     print("L Mesh")
     u_f_L = [1 for n in hMesh[fineLevel].nodes]
